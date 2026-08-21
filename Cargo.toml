@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
-exclude = ["vendor"]
+exclude = ["crates/baton-winit"]
 
 [workspace.package]
 edition = "2024"
@@ -50,11 +50,24 @@ debug = 1
 # `{NSNotFound, 0}` and `None`, so the input method cannot use that model
 # and drops the first jamo: typing "한글" produces "ㅎㅏㄴ글".
 #
-# `vendor/winit` fixes it. Our delta is `vendor/winit/BATON.diff` and the
-# reasoning is in `vendor/winit/NOTICE.md`. This is a path dependency, not
-# a git dependency, so builds stay hermetic.
+# `crates/baton-winit` fixes it. Our delta is its `UPSTREAM.diff` and the
+# reasoning is its `NOTICE.md`. This is a path dependency, not a git
+# dependency, so builds stay hermetic.
+#
+# Two things about that crate look wrong and are not: its package name is still
+# `winit` (patch substitutes by package name, so renaming it makes cargo fall
+# back to the published crate), and it is excluded from the workspace (so fmt,
+# clippy and test do not descend into 57k lines of third-party code).
+#
+# Verified necessary, not assumed. With a winit-only probe -- no iced, no widget
+# of ours -- typing g k s r m f on a 2-Set Korean layout gives:
+#   published winit 0.30.13          -> "ㅎㅏㄴ글"
+#   plus upstream PR #4650 and #4666 -> "ㅎㅏㄴ글"   (upstream's own fix is not enough)
+#   crates/baton-winit               -> "한글"
+# winit exposes only three IME setters and no way to hand it surrounding text,
+# so this cannot be fixed above winit.
 #
 # Removing this section re-breaks Korean input. A test asserts it is here:
 # crates/baton-term/tests/ime.rs
 [patch.crates-io]
-winit = { path = "vendor/winit" }
+winit = { path = "crates/baton-winit" }

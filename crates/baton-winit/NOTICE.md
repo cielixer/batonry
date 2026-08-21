@@ -1,4 +1,4 @@
-# `vendor/winit` -- why this is here
+# `crates/baton-winit` -- why this is here
 
 A copy of `winit` 0.30.13 (Apache-2.0) with macOS Korean input fixed.
 `[patch.crates-io]` points the whole workspace, including `iced`, at this copy.
@@ -6,11 +6,25 @@ It is a **path** dependency, not a git dependency, so builds stay hermetic.
 
 - Upstream: crates.io `winit 0.30.13`
 - Licence: Apache-2.0 (upstream `LICENSE` preserved verbatim)
-- Our delta: **`BATON.diff`**. One file is touched:
+- Our delta: **`UPSTREAM.diff`**. One file is touched:
   `src/platform_impl/macos/view.rs`
 - `examples/`, `tests/`, `docs/` and `benches/` were removed along with their
   manifest entries, to keep the tree small. A dependency only builds its lib,
   so this does not affect the build.
+
+## Two things that look wrong and are not
+
+**The package is still called `winit`.** `[patch.crates-io]` substitutes by
+package name, so the replacement has to *be* the crate being patched. Renaming
+it to `baton-winit` makes cargo report "patch was not used in the crate graph"
+and quietly fall back to the published winit -- which re-breaks Korean input.
+The directory carries our name because we maintain the patch; the package name
+is not ours to choose.
+
+**It is excluded from the workspace** (`exclude` in the root `Cargo.toml`).
+Otherwise `cargo fmt`, `cargo clippy -D warnings` and `cargo test --workspace`
+would all descend into 57k lines of third-party code. It builds as a path
+dependency, exactly as it did before the move.
 
 ## What is fixed
 

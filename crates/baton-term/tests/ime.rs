@@ -8,7 +8,7 @@
 //!
 //! winit 0.30.13 as published answers `{NSNotFound, 0}` and `None`, so the
 //! input method cannot use that model and the first jamo never joins the
-//! composition: typing "한글" produces "ㅎㅏㄴ글". `vendor/winit` fixes it by
+//! composition: typing "한글" produces "ㅎㅏㄴ글". `crates/baton-winit` fixes it by
 //! exposing only the in-flight composition as the document and absorbing the
 //! replacement, so the app sees nothing but ordinary `Preedit` / `Commit`.
 //!
@@ -119,18 +119,18 @@ fn recording_from_before_the_fix_shows_the_broken_composition() {
 /// files. Without this, a PR that deletes `[patch.crates-io]` goes green and
 /// Korean input silently breaks again.
 #[test]
-fn vendored_winit_ime_patch_is_wired_up() {
+fn winit_ime_patch_is_wired_up() {
     let manifest = std::fs::read_to_string("../../Cargo.toml")
         .expect("workspace manifest");
     assert!(
         manifest.contains("[patch.crates-io]")
-            && manifest.contains("winit = { path = \"vendor/winit\" }"),
-        "the workspace no longer patches vendor/winit, so the published winit \
-         is in use and the first Hangul jamo is dropped again"
+            && manifest.contains("winit = { path = \"crates/baton-winit\" }"),
+        "the workspace no longer patches crates/baton-winit, so the published \
+         winit is in use and the first Hangul jamo is dropped again"
     );
 
     let view = std::fs::read_to_string(
-        "../../vendor/winit/src/platform_impl/macos/view.rs",
+        "../baton-winit/src/platform_impl/macos/view.rs",
     )
     .expect("vendored winit view.rs");
     for needle in [
@@ -144,7 +144,7 @@ fn vendored_winit_ime_patch_is_wired_up() {
     ] {
         assert!(
             view.contains(needle),
-            "{needle:?} is gone from vendor/winit -- the IME fix was reverted"
+            "{needle:?} is gone from crates/baton-winit -- the IME fix was reverted"
         );
     }
     // And the shape the upstream issue points at must not come back.

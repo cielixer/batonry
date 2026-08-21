@@ -13,4 +13,4 @@
 /_to_delete/
 _to_delete/
 /.omx/
-/vendor/*/target
+/crates/baton-winit/target

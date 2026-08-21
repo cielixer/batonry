@@ -12,14 +12,37 @@ It is a **path** dependency, not a git dependency, so builds stay hermetic.
   manifest entries, to keep the tree small. A dependency only builds its lib,
   so this does not affect the build.
 
+## Every platform backend is kept on purpose
+
+Our delta touches exactly one file, `src/platform_impl/macos/view.rs`. The
+android, ios, linux, orbital, web and windows backends are untouched and still
+build -- the whole workspace compiles on Linux, verified in a container.
+
+Do not delete them to save space. The client is macOS-only today, but the other
+platforms are expected later, and a backend deleted now is a backend that has
+to be re-vendored (and re-diffed against a newer upstream) then. The 57k lines
+are almost entirely code we never compile on macOS, so they cost disk and
+nothing else.
+
 ## Two things that look wrong and are not
 
-**The package is still called `winit`.** `[patch.crates-io]` substitutes by
-package name, so the replacement has to *be* the crate being patched. Renaming
-it to `baton-winit` makes cargo report "patch was not used in the crate graph"
-and quietly fall back to the published winit -- which re-breaks Korean input.
-The directory carries our name because we maintain the patch; the package name
-is not ours to choose.
+**The package is still called `winit`,** even though the directory is
+`baton-winit`. `[patch.crates-io]` substitutes by package identity: the crate
+graph asks for `winit`, so only a package named `winit` can satisfy it. Both
+renaming attempts were tried and both fail the same way --
+
+    [patch.crates-io]
+    winit = { path = "crates/baton-winit", package = "baton-winit" }
+    baton-winit = { path = "crates/baton-winit" }
+
+-- cargo emits `patch ... was not used in the crate graph` and then quietly
+resolves the published winit instead. That is the dangerous part: the build
+succeeds and Korean input is broken again.
+
+The only way to give this crate our own package name would be to fork
+`iced_winit` as well, where `winit = { path = "...", package = "baton-winit" }`
+is legal in `[dependencies]`. That trades one patch line for a second fork of a
+crate that has to be re-forked on every iced release. Not worth it.
 
 **It is excluded from the workspace** (`exclude` in the root `Cargo.toml`).
 Otherwise `cargo fmt`, `cargo clippy -D warnings` and `cargo test --workspace`

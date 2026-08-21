@@ -1,0 +1,13 @@
+[package]
+name = "baton"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+baton-ui = { path = "../baton-ui" }
+baton-ssh = { path = "../baton-ssh" }
+baton-store = { path = "../baton-store" }
+baton-platform = { path = "../baton-platform" }
+iced = { workspace = true }

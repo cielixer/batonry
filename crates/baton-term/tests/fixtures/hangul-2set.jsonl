@@ -1,0 +1,24 @@
+# Recorded on macOS 26.5.2 / iced 0.14.0 / vendor/winit (with the IME fix) /
+# com.apple.inputmethod.Korean.2SetKorean. Typed "한글 " on a 2-Set layout,
+# i.e. the key codes for g k s r m f SPACE.
+#
+# This is correct behaviour: composition starts on the first jamo (ㅎ -> 하 ->
+# 한) and commits at each syllable boundary.
+#
+# The broken sequence from before the winit fix is kept next to this file as
+# hangul-2set-before-winit-fix.jsonl. The difference between the two files is
+# exactly what the fix changed.
+{"ev": "opened"}
+{"ev": "preedit", "content": "ㅎ", "sel": [3, 3]}
+{"ev": "preedit", "content": "하", "sel": [3, 3]}
+{"ev": "preedit", "content": "한", "sel": [3, 3]}
+{"ev": "preedit", "content": "한", "sel": [3, 3]}
+{"ev": "preedit", "content": ""}
+{"ev": "commit", "text": "한"}
+{"ev": "preedit", "content": "ㄱ", "sel": [3, 3]}
+{"ev": "preedit", "content": "그", "sel": [3, 3]}
+{"ev": "preedit", "content": "글", "sel": [3, 3]}
+{"ev": "preedit", "content": "글", "sel": [3, 3]}
+{"ev": "preedit", "content": ""}
+{"ev": "commit", "text": "글"}
+{"ev": "commit", "text": " "}

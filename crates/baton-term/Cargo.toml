@@ -1,0 +1,26 @@
+[package]
+name = "baton-term"
+# The hardcopy is edition 2021. Raise it once the code is fully ours.
+edition = "2021"
+version.workspace = true
+license.workspace = true # MIT, same as the original iced_term
+rust-version.workspace = true
+
+# Hardcopy of iced_term 0.8.0 (crates.io, git
+# e0e90be2c160bd68f1bf544a51bf772d75b98ffc). Every line we changed carries a
+# `// BATON:` comment; UPSTREAM.diff is the same delta in machine-readable form
+# and documents how to regenerate it.
+#
+# This crate must not know about `baton-core`: it is a plain terminal widget so
+# that it can be split into its own repository later.
+[dependencies]
+alacritty_terminal = { workspace = true } # raised 0.25.1 -> 0.26.0
+iced = { workspace = true }
+iced_core = { workspace = true }
+iced_graphics = { workspace = true }
+tokio = { workspace = true }
+open = { workspace = true }
+anyhow = { workspace = true }
+
+[dev-dependencies]
+iced_test = { workspace = true }

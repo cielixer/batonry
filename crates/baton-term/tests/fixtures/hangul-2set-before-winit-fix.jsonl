@@ -1,0 +1,45 @@
+# Recorded on macOS 26.5.2 / iced 0.14.0 / winit 0.30.13 as published /
+# com.apple.inputmethod.Korean.2SetKorean. A human typing 2-Set Korean, with
+# some typos. Not cleaned up.
+#
+# This is NOT correct behaviour. The first jamo ㅎ falls out as a raw key and
+# ㅏ / ㄴ commit separately because published winit does not implement the
+# NSTextInputClient readback (selectedRange, attributedSubstringForProposedRange)
+# that the macOS Korean input method needs to compose jamo into syllables.
+#
+# Kept as the record of what `vendor/winit` fixes.
+{"ev": "key", "text": "ㅎ"}
+{"ev": "opened"}
+{"ev": "preedit", "content": "ㅏ", "sel": [3, 3]}
+{"ev": "preedit", "content": "ㅏ", "sel": [3, 3]}
+{"ev": "preedit", "content": ""}
+{"ev": "commit", "text": "ㅏ"}
+{"ev": "preedit", "content": ""}
+{"ev": "preedit", "content": "ㄴ", "sel": [3, 3]}
+{"ev": "preedit", "content": "ㄴ", "sel": [3, 3]}
+{"ev": "preedit", "content": ""}
+{"ev": "commit", "text": "ㄴ"}
+{"ev": "preedit", "content": ""}
+{"ev": "preedit", "content": "ㄱ", "sel": [3, 3]}
+{"ev": "preedit", "content": "그", "sel": [3, 3]}
+{"ev": "preedit", "content": "글", "sel": [3, 3]}
+{"ev": "preedit", "content": "글 ", "sel": [4, 4]}
+{"ev": "preedit", "content": ""}
+{"ev": "commit", "text": "글 "}
+{"ev": "preedit", "content": ""}
+{"ev": "preedit", "content": "ㅂ", "sel": [3, 3]}
+{"ev": "preedit", "content": "바", "sel": [3, 3]}
+{"ev": "preedit", "content": "받", "sel": [3, 3]}
+{"ev": "preedit", "content": "바", "sel": [3, 3]}
+{"ev": "preedit", "content": ""}
+{"ev": "commit", "text": "바"}
+{"ev": "preedit", "content": ""}
+{"ev": "preedit", "content": "도", "sel": [3, 3]}
+{"ev": "preedit", "content": "도", "sel": [3, 3]}
+{"ev": "preedit", "content": ""}
+{"ev": "commit", "text": "도"}
+{"ev": "preedit", "content": ""}
+{"ev": "key", "text": "\r"}
+{"ev": "key", "text": "\u001b"}
+{"ev": "closed"}
+{"ev": "key", "text": "Named(Super)"}

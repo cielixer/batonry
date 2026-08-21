@@ -1,0 +1,48 @@
+name: Ticket
+description: One PR's worth of work
+labels: ["type:ticket"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **One ticket = one PR = one working session.** If it does not fit that,
+        split it.
+
+        A fresh session does not read the whole repository. The "Read first"
+        field below is its only entrance.
+  - type: textarea
+    id: what
+    attributes:
+      label: What
+      description: One paragraph. What is visible when this is done?
+    validations: { required: true }
+  - type: textarea
+    id: read
+    attributes:
+      label: Read first
+      description: >
+        Three to five pointers - source paths, linked issues, upstream links.
+        If you need more than five, the ticket is too large.
+      value: |
+        - `crates/`
+        - #
+    validations: { required: true }
+  - type: textarea
+    id: contract
+    attributes:
+      label: Architecture contract
+      description: >
+        Which architecture contract does this touch? Write "none" if it
+        genuinely touches none.
+      placeholder: "Drive alacritty_terminal by bytes; never hand it a PTY handle"
+    validations: { required: true }
+  - type: textarea
+    id: dod
+    attributes:
+      label: Definition of done
+      description: Checkboxes. Copy the specific gates this ticket is on.
+      value: |
+        - [ ] 
+        - [ ] `cargo clippy --workspace --all-targets -- -D warnings` passes
+        - [ ] `cargo test --workspace` passes
+    validations: { required: true }

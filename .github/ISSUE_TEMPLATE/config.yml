@@ -1,0 +1,7 @@
+blank_issues_enabled: false
+contact_links:
+  - name: I want to change a decision
+    url: https://github.com/cielixer/batonry/labels/type%3Adecision
+    about: >
+      Open a decision issue instead of arguing in a ticket comment. A decision
+      lives in one place so that "why is it like this" has one answer.

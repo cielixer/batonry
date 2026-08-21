@@ -1,0 +1,17 @@
+[package]
+name = "baton-ui"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+# No `main` here: a crate with a main cannot be driven by
+# iced_test::Simulator, and the UI tests depend on that.
+[dependencies]
+baton-core = { path = "../baton-core" }
+baton-action = { path = "../baton-action" }
+baton-term = { path = "../baton-term" }
+iced = { workspace = true }
+
+[dev-dependencies]
+iced_test = { workspace = true }

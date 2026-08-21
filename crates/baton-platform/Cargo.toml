@@ -1,0 +1,10 @@
+[package]
+name = "baton-platform"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+# Every #[cfg(target_os)] in the workspace lives in this crate.
+[dependencies]
+baton-core = { path = "../baton-core" }

@@ -1,0 +1,10 @@
+[package]
+name = "baton-store"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+baton-core = { path = "../baton-core" }
+thiserror = { workspace = true }

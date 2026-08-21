@@ -1,0 +1,60 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+exclude = ["vendor"]
+
+[workspace.package]
+edition = "2024"
+version = "0.1.0"
+license = "MIT"
+repository = "https://github.com/cielixer/batonry"
+rust-version = "1.93"
+
+[workspace.dependencies]
+# UI. Declarative (Elm), wgpu backend.
+iced = { version = "0.14.0", features = ["canvas", "lazy", "advanced", "tokio"] }
+iced_core = "0.14.0"
+iced_graphics = { version = "0.14.0", default-features = false }
+iced_test = "0.14.0"
+
+# VT parsing and the cell grid. Pinned: this crate makes breaking changes
+# on minor releases.
+alacritty_terminal = "0.26.0"
+
+anyhow = "1.0"
+thiserror = "2.0"
+tokio = { version = "1", features = [
+    "rt-multi-thread",
+    "sync",
+    "io-util",
+    "process",
+    "macros",
+    "time",
+] }
+open = "5.3"
+unicode-width = "0.2"
+
+[profile.release]
+debug = 1 # keep symbols: we profile release builds
+
+[profile.bench]
+debug = 1
+
+# Korean input on macOS does not work with the published winit.
+#
+# The macOS Korean input method composes jamo into syllables by calling
+# `insertText:` with a `replacementRange` -- it inserts a character, then
+# reads it back and replaces it. That requires the client to expose its
+# document through `selectedRange` and
+# `attributedSubstringForProposedRange:`. winit 0.30.13 answers
+# `{NSNotFound, 0}` and `None`, so the input method cannot use that model
+# and drops the first jamo: typing "한글" produces "ㅎㅏㄴ글".
+#
+# `vendor/winit` fixes it. Our delta is `vendor/winit/BATON.diff` and the
+# reasoning is in `vendor/winit/NOTICE.md`. This is a path dependency, not
+# a git dependency, so builds stay hermetic.
+#
+# Removing this section re-breaks Korean input. A test asserts it is here:
+# crates/baton-term/tests/ime.rs
+[patch.crates-io]
+winit = { path = "vendor/winit" }

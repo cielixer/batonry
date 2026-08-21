@@ -1,0 +1,11 @@
+[package]
+name = "baton-core"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+# No UI dependency, no IO dependency. If iced/tokio/rusqlite appears here,
+# the domain is no longer testable as pure functions.
+[dependencies]
+thiserror = { workspace = true }

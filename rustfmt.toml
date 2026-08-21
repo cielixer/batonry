@@ -1,0 +1,9 @@
+# Same values as iced_term's rustfmt.toml. `crates/baton-term` is a hardcopy of
+# that crate, and keeping the format identical is what makes UPSTREAM.diff
+# readable.
+#
+# `edition` is intentionally absent: it differs per crate and cargo fmt picks
+# each crate's own.
+max_width = 80
+match_block_trailing_comma = true
+reorder_imports = true

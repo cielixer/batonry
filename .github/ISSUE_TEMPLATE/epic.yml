@@ -1,0 +1,30 @@
+name: Epic
+description: One stage of the milestone, tracked through sub-issues
+labels: ["type:epic"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        An epic is one stage: two to three weeks, closed when every sub-issue is
+        closed **and** the thing it promised is actually visible.
+  - type: textarea
+    id: visible
+    attributes:
+      label: What becomes visible
+      description: >
+        Describe the state of the app when this epic closes. Not a task list -
+        what can a person see or do that they could not before?
+    validations: { required: true }
+  - type: textarea
+    id: scope
+    attributes:
+      label: In scope
+      value: |
+        - 
+    validations: { required: true }
+  - type: textarea
+    id: gate
+    attributes:
+      label: Gate to the next stage
+      description: The condition that must hold before the next epic starts.
+    validations: { required: true }

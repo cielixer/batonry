@@ -1,0 +1,7 @@
+# Run headless tests on the CPU rasterizer.
+#
+# `iced_test::Simulator` has to draw once before layout settles. The default
+# backend (wgpu) needs a GPU and dies on a GPU-less CI runner; tiny-skia runs
+# anywhere.
+[env]
+ICED_TEST_BACKEND = "tiny-skia"

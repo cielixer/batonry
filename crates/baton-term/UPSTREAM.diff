@@ -1,0 +1,701 @@
+Our delta on top of the `iced_term` 0.8.0 hardcopy.
+=======================================================================
+
+`crates/baton-term` started as a verbatim copy of `iced_term` 0.8.0
+(MIT, crates.io, git e0e90be2c160bd68f1bf544a51bf772d75b98ffc).
+Every line we changed is marked with a `// BATON:` comment in the source;
+this file is the machine-readable form of the same thing.
+
+To regenerate:
+
+    curl -sL -o iced_term.crate \
+      https://static.crates.io/crates/iced_term/iced_term-0.8.0.crate
+    tar xzf iced_term.crate
+    for f in crates/baton-term/src/*.rs; do
+      diff -u "iced_term-0.8.0/src/$(basename $f)" "$f"
+    done
+
+What we changed and why:
+
+  * backend.rs  Split the alacritty event channel in two. `Wakeup` is
+                coalesced at the source through a capacity-1 channel;
+                everything else goes through an unbounded channel so it
+                can never be dropped. The original called `blocking_send`
+                while holding `FairMutex<Term>`, which deadlocks: the only
+                task that can drain the channel is the UI thread, and the
+                UI thread is blocked waiting for that same lock.
+                Reproduced 100% of the time with `yes | head -c 100000`.
+                Regression test: crates/baton-term/tests/deadlock.rs
+
+  * backend.rs  Damage tracking. `Term::damage()` decides whether the grid
+                actually changed; the original cloned the whole
+                `Grid<Cell>` on every sync and never looked at damage.
+
+  * view.rs     Glyph run batching. Contiguous same-style ASCII cells are
+                shaped once instead of once per cell: 43,108 -> 375
+                `fill_text` calls on a dense page, geometry build 672 ->
+                313 us.
+
+  * view.rs     Instrumentation (`metrics.rs`, new file) used to measure
+                the above.
+
+  * terminal.rs Removed two `panic!`s. A closed channel is the normal way
+                a pane shuts down, not a bug. Added `dump_grid()`, which
+                is the canonical correctness oracle for rendering.
+
+=======================================================================
+--- iced_term-0.8.0/src/backend.rs
++++ baton-term/src/backend.rs
+@@ -19,6 +19,7 @@
+ use std::cmp::min;
+ use std::io::Result;
+ use std::ops::{Index, RangeInclusive};
++use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
+ use std::sync::Arc;
+ use tokio::sync::mpsc;
+ 
+@@ -137,12 +138,18 @@
+     notifier: Notifier,
+     last_content: RenderableContent,
+     pub(crate) url_regex: RegexSearch,
++    /// BATON: did the grid actually change since the last sync?
++    /// `Term::damage()` answers this.
++    damaged: bool,
++    /// BATON: wakeup coalescing flag, shared with `EventProxy`.
++    wakeup_pending: Arc<AtomicBool>,
+ }
+ 
+ impl Backend {
+     pub fn new(
+         id: u64,
+-        pty_event_proxy_sender: mpsc::Sender<Event>,
++        wakeups: mpsc::Sender<()>,
++        events: mpsc::UnboundedSender<Event>,
+         settings: BackendSettings,
+     ) -> Result<Self> {
+         let pty_config = tty::Options {
+@@ -156,7 +163,12 @@
+         let terminal_size = TerminalSize::default();
+         let pty = tty::new(&pty_config, terminal_size.into(), id)?;
+ 
+-        let event_proxy = EventProxy(pty_event_proxy_sender);
++        let wakeup_pending = Arc::new(AtomicBool::new(false));
++        let event_proxy = EventProxy {
++            wakeups,
++            events,
++            wakeup_pending: wakeup_pending.clone(),
++        };
+ 
+         let mut term = Term::new(config, &terminal_size, event_proxy.clone());
+ 
+@@ -186,6 +198,8 @@
+             notifier,
+             last_content: initial_content,
+             url_regex: RegexSearch::new(URL_REGEX).expect("invalid url regexp"),
++            damaged: true,
++            wakeup_pending,
+         })
+     }
+ 
+@@ -195,6 +209,10 @@
+         let mut term = term.lock();
+         match cmd {
+             Command::ProcessAlacrittyEvent(event) => {
++                // BATON: we have this wakeup, so we are ready for the next.
++                // Cleared *before* reading the grid: that can produce a
++                // redundant wakeup, never a lost one.
++                self.wakeup_pending.store(false, Relaxed);
+                 match event {
+                     Event::Exit => {
+                         action = Action::Shutdown;
+@@ -500,16 +518,37 @@
+         let selectable_range = match &terminal.selection {
+             Some(s) => s.to_range(terminal),
+             None => None,
++        };
++
++        // BATON: read damage first. The original never looks at damage and
++        // clones unconditionally. `damage()` gives either `Full` or an
++        // iterator of line ranges; we only use "did anything change". Per-line
++        // partial updates are the row cache's job in stage 2.
++        let dirty = match terminal.damage() {
++            term::TermDamage::Full => true,
++            term::TermDamage::Partial(mut it) => it.next().is_some(),
+         };
++        terminal.reset_damage();
++        self.damaged = self.damaged || dirty;
+ 
+         let cursor = terminal.grid_mut().cursor_cell().clone();
+-        self.last_content.grid = terminal.grid().clone();
++        // BATON: the original clones the whole `Grid<Cell>` on every sync.
++        // Skip it when nothing was damaged.
++        if dirty || !crate::metrics::skip_grid_clone() {
++            self.last_content.grid = terminal.grid().clone();
++            crate::metrics::GRID_CLONES.fetch_add(1, Relaxed);
++        }
+         self.last_content.selectable_range = selectable_range;
+         self.last_content.cursor = cursor.clone();
+         self.last_content.terminal_mode = *terminal.mode();
+         self.last_content.terminal_size = self.size;
+     }
+ 
++    /// BATON: read and clear the damage flag. Used by `Terminal::redraw`.
++    pub(crate) fn take_damaged(&mut self) -> bool {
++        std::mem::take(&mut self.damaged)
++    }
++
+     pub fn renderable_content(&self) -> &RenderableContent {
+         &self.last_content
+     }
+@@ -575,11 +614,61 @@
+     }
+ }
+ 
++/// BATON: how alacritty hands events up to us. **There are two paths.**
++///
++/// | path | carries | why |
++/// |---|---|---|
++/// | `wakeups` (capacity 1, coalesced at the source) | `Event::Wakeup` | "something changed". **Safe to drop** -- one later signal reflects every change up to that point, because sync reads the current grid. This is the only high-frequency event |
++/// | `events` (unbounded) | `Exit`, `Title`, `PtyWrite`, `Bell`, clipboard | **Must not be dropped.** A lost `Exit` means the pane never learns the process died. A lost `PtyWrite` swallows a DA/DSR reply, and the program that asked hangs |
++///
++/// **Neither path ever blocks.** This call happens inside alacritty's
++/// `pty_read`, so it runs while `FairMutex<Term>` is *held*. Sleeping here
++/// deadlocks: the only task that can drain the channel is the UI thread, and
++/// the UI thread is waiting for that same lock. The original
++/// (`iced_term` 0.8.0) did exactly that with `blocking_send`, and it hung.
++///
++/// Regression test: `tests/deadlock.rs`.
+ #[derive(Clone)]
+-pub struct EventProxy(mpsc::Sender<Event>);
++pub struct EventProxy {
++    /// Capacity 1: at most one unprocessed wakeup exists at a time.
++    wakeups: mpsc::Sender<()>,
++    /// Unbounded. **No drop path** -- that is what keeps `Exit` alive.
++    events: mpsc::UnboundedSender<Event>,
++    /// Source-side coalescing flag. Cleared when the consumer takes a wakeup.
++    wakeup_pending: Arc<AtomicBool>,
++}
+ 
+ impl EventListener for EventProxy {
+     fn send_event(&self, event: Event) {
+-        let _ = self.0.blocking_send(event);
++        if matches!(event, Event::Wakeup) {
++            // One already pending: do not even touch the channel.
++            // This is read coalescing.
++            if self.wakeup_pending.swap(true, Relaxed) {
++                crate::metrics::WAKEUPS_COALESCED.fetch_add(1, Relaxed);
++                return;
++            }
++            if self.wakeups.try_send(()).is_err() {
++                // Queue full, or the receiver is gone. Both are safe to
++                // drop; reset the flag so the next wakeup tries again.
++                self.wakeup_pending.store(false, Relaxed);
++                crate::metrics::WAKEUPS_COALESCED.fetch_add(1, Relaxed);
++            }
++            return;
++        }
++
++        // Unbounded path. The only failure is a gone receiver, which is how a
++        // pane closes -- not data loss, so EVENTS_DROPPED stays 0.
++        if self.events.send(event).is_err() {
++            crate::metrics::CHANNEL_CLOSED.fetch_add(1, Relaxed);
++            return;
++        }
++        let depth = crate::metrics::EVENTS_QUEUED.fetch_add(1, Relaxed) + 1;
++        crate::metrics::EVENTS_QUEUE_MAX.fetch_max(depth, Relaxed);
+     }
+ }
++
++/// BATON: the consumer holds both receivers, so they travel together.
++pub struct EventSink {
++    pub(crate) wakeups: mpsc::Receiver<()>,
++    pub(crate) events: mpsc::UnboundedReceiver<Event>,
++}
+--- iced_term-0.8.0/src/lib.rs
++++ baton-term/src/lib.rs
+@@ -1,5 +1,10 @@
++//! Hardcopy of `iced_term` 0.8.0. Every line we changed carries a `// BATON:`
++//! comment; `UPSTREAM.diff` next to this file is the same delta in
++//! machine-readable form and says how to regenerate it.
++
+ pub mod actions;
+ pub mod bindings;
++pub mod metrics; // BATON: new. Instrumentation for the render path.
+ pub mod settings;
+ 
+ mod backend;
+--- iced_term-0.8.0/src/terminal.rs
++++ baton-term/src/terminal.rs
+@@ -5,6 +5,7 @@
+ use crate::settings::{FontSettings, Settings, ThemeSettings};
+ use crate::theme::{ColorPalette, Theme};
+ use crate::AlacrittyEvent;
++use alacritty_terminal::grid::Dimensions as _;
+ use iced::futures::stream::BoxStream;
+ use iced::futures::{SinkExt, StreamExt};
+ use iced::widget::canvas::Cache;
+@@ -12,7 +13,7 @@
+ use std::hash::{Hash, Hasher};
+ use std::io::Result;
+ use std::sync::Arc;
+-use tokio::sync::mpsc::{self, Receiver};
++use tokio::sync::mpsc;
+ use tokio::sync::Mutex;
+ 
+ #[derive(Debug, Clone)]
+@@ -36,12 +37,16 @@
+     pub(crate) cache: Cache,
+     pub(crate) bindings: BindingsLayout,
+     pub(crate) backend: backend::Backend,
+-    backend_event_rx: Arc<Mutex<Receiver<AlacrittyEvent>>>,
++    backend_event_rx: Arc<Mutex<backend::EventSink>>,
+ }
+ 
+ impl Terminal {
+     pub fn new(id: u64, settings: Settings) -> Result<Self> {
+-        let (backend_event_tx, backend_event_rx) = mpsc::channel(100);
++        // BATON: two channels. Wakeups get capacity 1 and are coalesced at
++        // the source; everything else is unbounded so it cannot be dropped.
++        // See `backend::EventProxy` for why.
++        let (wakeup_tx, wakeup_rx) = mpsc::channel(1);
++        let (event_tx, event_rx) = mpsc::unbounded_channel();
+         let theme = Theme::new(settings.theme);
+         let font = TermFont::new(settings.font);
+ 
+@@ -54,10 +59,14 @@
+             cache: Cache::default(),
+             backend: backend::Backend::new(
+                 id,
+-                backend_event_tx,
++                wakeup_tx,
++                event_tx,
+                 settings.backend,
+             )?,
+-            backend_event_rx: Arc::new(Mutex::new(backend_event_rx)),
++            backend_event_rx: Arc::new(Mutex::new(backend::EventSink {
++                wakeups: wakeup_rx,
++                events: event_rx,
++            })),
+         })
+     }
+ 
+@@ -88,6 +97,8 @@
+                 self.bindings.add_bindings(bindings);
+             },
+             Command::ProxyToBackend(cmd) => {
++                crate::metrics::COMMANDS
++                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                 action = self.backend.handle(cmd);
+             },
+         };
+@@ -109,14 +120,23 @@
+     }
+ 
+     fn redraw(&mut self) {
+-        self.cache.clear();
++        // BATON: the original clears the cache on every command. Damage-based
++        // invalidation only throws the tessellation away when the grid
++        // actually changed.
++        if crate::metrics::damage_aware() {
++            if self.backend.take_damaged() {
++                self.cache.clear();
++            }
++        } else {
++            self.cache.clear();
++        }
+     }
+ }
+ 
+ #[derive(Clone)]
+ struct TerminalSubscriptionData {
+     id: u64,
+-    event_receiver: Arc<Mutex<Receiver<AlacrittyEvent>>>,
++    event_receiver: Arc<Mutex<backend::EventSink>>,
+ }
+ 
+ impl Hash for TerminalSubscriptionData {
+@@ -131,29 +151,98 @@
+     let id = data.id;
+     let event_receiver = data.event_receiver.clone();
+     iced::stream::channel(1000, async move |mut output| {
+-        let mut shutdown = false;
+         loop {
+-            let mut event_receiver = event_receiver.lock().await;
+-            match event_receiver.recv().await {
+-                Some(event) => {
+-                    if let AlacrittyEvent::Exit = event {
+-                        shutdown = true
+-                    };
+-
+-                    output
+-                        .send(Event::BackendCall(id, backend::Command::ProcessAlacrittyEvent(event)))
+-                        .await
+-                        .unwrap_or_else(|_| {
+-                            panic!("iced_term stream {}: sending BackendEventReceived event is failed", id)
+-                        });
++            let mut sink = event_receiver.lock().await;
++            // Borrow the receivers separately: `select!` cannot borrow the
++            // same value twice.
++            let backend::EventSink { wakeups, events } = &mut *sink;
++            // BATON: wait on both. `biased` checks the lossless path first;
++            // wakeups are coalesced to at most one in flight, so they cannot
++            // starve.
++            let event = tokio::select! {
++                biased;
++                ev = events.recv() => match ev {
++                    Some(ev) => {
++                        crate::metrics::EVENTS_QUEUED.fetch_sub(
++                            1,
++                            std::sync::atomic::Ordering::Relaxed,
++                        );
++                        ev
++                    },
++                    // All senders gone: the backend is finished.
++                    None => return,
+                 },
+-                None => {
+-                    if !shutdown {
+-                        panic!("iced_term stream {}: terminal event channel closed unexpected", id);
+-                    }
++                w = wakeups.recv() => match w {
++                    Some(()) => AlacrittyEvent::Wakeup,
++                    None => return,
+                 },
++            };
++            drop(sink);
++
++            // BATON: the original panics here. A closed channel is the normal
++            // way a pane shuts down -- the UI dropped it first -- so just stop.
++            if output
++                .send(Event::BackendCall(
++                    id,
++                    backend::Command::ProcessAlacrittyEvent(event),
++                ))
++                .await
++                .is_err()
++            {
++                return;
+             }
+         }
+     })
+     .boxed()
+ }
++
++impl Terminal {
++    /// BATON: dump the grid as text.
++    ///
++    /// This is the canonical correctness oracle for rendering. A pixel
++    /// comparison only says that something changed, never what is correct,
++    /// and it depends on the machine's fonts. This does not.
++    ///
++    /// Spacer cells following a double-width character are skipped so the dump
++    /// reads the way a human sees the screen. Trailing blanks are trimmed.
++    pub fn dump_grid(&mut self) -> String {
++        use alacritty_terminal::term::cell::Flags;
++        self.backend.sync();
++        let content = self.backend.renderable_content();
++        let cols = content.grid.columns();
++        let mut out = String::new();
++        let mut line = String::new();
++        let mut col = 0usize;
++        for indexed in content.grid.display_iter() {
++            if !indexed.cell.flags.intersects(
++                Flags::WIDE_CHAR_SPACER | Flags::LEADING_WIDE_CHAR_SPACER,
++            ) {
++                line.push(indexed.c);
++            }
++            col += 1;
++            if col == cols {
++                out.push_str(line.trim_end());
++                out.push('\n');
++                line.clear();
++                col = 0;
++            }
++        }
++        // Trailing blank lines carry no information.
++        while out.ends_with("\n\n") {
++            out.pop();
++        }
++        out
++    }
++
++    /// BATON: the event stream without going through `iced`.
++    ///
++    /// Tests use this door. A `Subscription` only runs inside the iced
++    /// runtime, but the deadlock regression has to be driven from outside it,
++    /// so that a wedged pump fails the test instead of hanging it.
++    pub fn event_stream(&self) -> BoxStream<'static, Event> {
++        terminal_subscription_stream(&TerminalSubscriptionData {
++            id: self.id,
++            event_receiver: self.backend_event_rx.clone(),
++        })
++    }
++}
+--- iced_term-0.8.0/src/view.rs
++++ baton-term/src/view.rs
+@@ -2,8 +2,10 @@
+     Backend, Command, LinkAction, MouseButton, RenderableContent,
+ };
+ use crate::bindings::{BindingAction, BindingsLayout, InputKind};
++use crate::metrics; // BATON
+ use crate::terminal::{Event, Terminal};
+ use crate::theme::TerminalStyle;
++use alacritty_terminal::grid::Dimensions as _; // BATON: columns()/screen_lines()
+ use alacritty_terminal::index::Point as TerminalGridPoint;
+ use alacritty_terminal::selection::SelectionType;
+ use alacritty_terminal::term::{cell, TermMode};
+@@ -22,6 +24,7 @@
+ use iced_graphics::core::widget::{tree, Tree};
+ use iced_graphics::core::Widget;
+ use iced_graphics::geometry::Stroke;
++use std::sync::atomic::Ordering::Relaxed; // BATON
+ 
+ pub struct TerminalView<'a> {
+     term: &'a Terminal,
+@@ -441,8 +444,19 @@
+         let font_scale_factor = self.term.font.scale_factor;
+         let layout_offset_x = layout.position().x;
+         let layout_offset_y = layout.position().y;
++
++        // BATON: instrumentation. `Cache::draw` only calls the closure when
++        // the bounds changed or the cache was cleared, so we flag from inside
++        // whether the closure actually ran and time it from outside.
++        metrics::DRAW_CALLS.fetch_add(1, Relaxed);
++        metrics::CELLS
++            .store(term_size.columns() * term_size.screen_lines(), Relaxed);
++        let built = std::cell::Cell::new(false);
++        let t0 = std::time::Instant::now();
++        let batched = metrics::batched();
+ 
+         let geom = self.term.cache.draw(renderer, viewport.size(), |frame| {
++            built.set(true);
+             // Precompute constants used in the inner loop
+             let display_offset = content.grid.display_offset() as f32;
+             let cell_size = Size::new(cell_width, cell_height);
+@@ -457,6 +471,9 @@
+ 
+             let mut last_line: Option<i32> = None;
+             let mut bg_batch_rect = BackgroundRect::default();
++            // BATON: glyph run accumulator. Contiguous cells with the same
++            // style are shaped once. The original calls `fill_text` per cell.
++            let mut run: Option<GlyphRun> = None;
+ 
+             for indexed in content.grid.display_iter() {
+                 // Compute per-cell geometry cheaply
+@@ -573,8 +590,9 @@
+                 }
+ 
+                 // Draw text
+-                if indexed.c != ' ' && indexed.c != '\t' {
+-                    if content.grid.cursor.point == indexed.point
++                let is_cursor_cell = content.grid.cursor.point == indexed.point;
++                if indexed.c != ' ' && indexed.c != '\t' || batched {
++                    if is_cursor_cell
+                         && content.terminal_mode.contains(TermMode::APP_CURSOR)
+                     {
+                         fg = bg;
+@@ -591,22 +609,83 @@
+                     if indexed.cell.flags.contains(cell::Flags::ITALIC) {
+                         font.style = FontStyle::Italic;
+                     }
+-                    let text = Text {
+-                        content: indexed.cell.c.to_string(),
+-                        position: Point::new(cell_center_x, cell_center_y),
+-                        font,
+-                        size: iced_core::Pixels(font_size),
+-                        color: fg,
+-                        align_x: Alignment::Center,
+-                        align_y: Vertical::Center,
+-                        shaping: Shaping::Advanced,
+-                        line_height: LineHeight::Relative(font_scale_factor),
+-                        ..Default::default()
+-                    };
+-                    frame.fill_text(text);
++
++                    // BATON: only batch characters that cannot break cell
++                    // alignment. Double-width chars, spacers and emoji need
++                    // their advance forced to the cell width, so they stay
++                    // per-cell.
++                    let runnable = batched
++                        && !is_cursor_cell
++                        && indexed.c.is_ascii()
++                        && !indexed.c.is_control()
++                        && !indexed.cell.flags.intersects(
++                            cell::Flags::WIDE_CHAR
++                                | cell::Flags::WIDE_CHAR_SPACER
++                                | cell::Flags::LEADING_WIDE_CHAR_SPACER,
++                        );
++
++                    if runnable {
++                        let extend = run.as_ref().is_some_and(|r| {
++                            r.line == line
++                                && r.next_col == col
++                                && r.color == fg
++                                && r.font == font
++                        });
++                        if extend {
++                            let r = run.as_mut().unwrap();
++                            r.text.push(indexed.c);
++                            r.next_col += 1.0;
++                        } else {
++                            flush_run(
++                                frame,
++                                run.take(),
++                                font_size,
++                                font_scale_factor,
++                            );
++                            run = Some(GlyphRun {
++                                line,
++                                next_col: col + 1.0,
++                                x,
++                                y: cell_center_y,
++                                color: fg,
++                                font,
++                                text: indexed.c.to_string(),
++                            });
++                        }
++                    } else {
++                        flush_run(
++                            frame,
++                            run.take(),
++                            font_size,
++                            font_scale_factor,
++                        );
++                        if indexed.c != ' ' && indexed.c != '\t' {
++                            metrics::TEXT_OPS.fetch_add(1, Relaxed);
++                            frame.fill_text(Text {
++                                content: indexed.cell.c.to_string(),
++                                position: Point::new(
++                                    cell_center_x,
++                                    cell_center_y,
++                                ),
++                                font,
++                                size: iced_core::Pixels(font_size),
++                                color: fg,
++                                align_x: Alignment::Center,
++                                align_y: Vertical::Center,
++                                shaping: Shaping::Advanced,
++                                line_height: LineHeight::Relative(
++                                    font_scale_factor,
++                                ),
++                                ..Default::default()
++                            });
++                        }
++                    }
+                 }
+             }
+ 
++            // BATON: flush the trailing glyph run.
++            flush_run(frame, run.take(), font_size, font_scale_factor);
++
+             // Flush any remaining background run at the end
+             if bg_batch_rect.can_flush() {
+                 frame.fill(
+@@ -616,6 +695,10 @@
+             }
+         });
+ 
++        if built.get() {
++            metrics::record_geom(t0.elapsed().as_nanos() as u64);
++        }
++
+         use iced::advanced::graphics::geometry::Renderer as _;
+         renderer.draw_geometry(geom);
+     }
+@@ -743,6 +826,48 @@
+     }
+ }
+ 
++#[allow(dead_code)]
++/// BATON: one shaping call for a run of same-style ASCII in the same row.
++struct GlyphRun {
++    line: i32,
++    /// The column this run expects next. A gap flushes the run.
++    next_col: f32,
++    /// Left edge of the run, on a cell boundary.
++    x: f32,
++    /// Vertical centre of the cell; matches the per-cell path.
++    y: f32,
++    color: Color,
++    font: iced::Font,
++    text: String,
++}
++
++fn flush_run(
++    frame: &mut iced::widget::canvas::Frame,
++    run: Option<GlyphRun>,
++    font_size: f32,
++    font_scale_factor: f32,
++) {
++    let Some(run) = run else { return };
++    if run.text.trim().is_empty() {
++        // A run of only spaces has nothing to draw; the background was
++        // already painted by the run-length pass.
++        return;
++    }
++    crate::metrics::TEXT_OPS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
++    frame.fill_text(Text {
++        content: run.text,
++        position: Point::new(run.x, run.y),
++        font: run.font,
++        size: iced_core::Pixels(font_size),
++        color: run.color,
++        align_x: Alignment::Left,
++        align_y: Vertical::Center,
++        shaping: Shaping::Advanced,
++        line_height: LineHeight::Relative(font_scale_factor),
++        ..Default::default()
++    });
++}
++
+ #[derive(Default)]
+ struct BackgroundRect {
+     display_offset: f32,
+@@ -791,6 +916,8 @@
+     }
+ 
+     fn build(&self, line: i32) -> Path {
++        crate::metrics::QUAD_OPS
++            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+         let flush_y = self.layout_offset_y
+             + ((line as f32 + self.display_offset) * self.cell_height);
+         Path::rectangle(
+@@ -984,8 +1111,10 @@
+         fn generates_drag_update_command_when_dragged_in_mouse_motion_mode() {
+             let mut state = TerminalViewState::new();
+             state.is_dragged = true; // Simulate an ongoing drag operation
+-            let mut terminal_content = RenderableContent::default();
+-            terminal_content.terminal_mode = TermMode::MOUSE_MOTION;
++            let terminal_content = RenderableContent {
++                terminal_mode: TermMode::MOUSE_MOTION,
++                ..Default::default()
++            };
+             let layout_position = Point { x: 5.0, y: 5.0 };
+             let cursor_position = Point { x: 100.0, y: 150.0 };
+             let mut commands = Vec::new();
+@@ -1020,8 +1149,10 @@
+             let mut state = TerminalViewState::new();
+             state.keyboard_modifiers = Modifiers::SHIFT;
+             state.is_dragged = true; // Simulate an ongoing drag operation
+-            let mut terminal_content = RenderableContent::default();
+-            terminal_content.terminal_mode = TermMode::SGR_MOUSE;
++            let terminal_content = RenderableContent {
++                terminal_mode: TermMode::SGR_MOUSE,
++                ..Default::default()
++            };
+             let layout_position = Point { x: 5.0, y: 5.0 };
+             let cursor_position = Point { x: 100.0, y: 150.0 };
+             let mut commands = Vec::new();
+@@ -1046,8 +1177,10 @@
+             let mut state = TerminalViewState::new();
+             state.keyboard_modifiers = Modifiers::COMMAND;
+             state.is_dragged = true; // Simulate an ongoing drag operation
+-            let mut terminal_content = RenderableContent::default();
+-            terminal_content.terminal_mode = TermMode::SGR_MOUSE;
++            let terminal_content = RenderableContent {
++                terminal_mode: TermMode::SGR_MOUSE,
++                ..Default::default()
++            };
+             let layout_position = Point { x: 5.0, y: 5.0 };
+             let cursor_position = Point { x: 100.0, y: 150.0 };
+             let mut commands = Vec::new();

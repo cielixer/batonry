@@ -1,0 +1,33 @@
+name: Spike
+description: An experiment that produces a yes or no
+labels: ["type:spike"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A spike is code you run to get an answer, not code you keep. It closes
+        when **the answer is written down** - the code itself is disposable.
+
+        A spike that answers "no" is not a failure, it is a result.
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: One sentence, answerable with yes or no.
+    validations: { required: true }
+  - type: textarea
+    id: branches
+    attributes:
+      label: What happens either way
+      value: |
+        - **Yes:** 
+        - **No:** 
+    validations: { required: true }
+  - type: textarea
+    id: output
+    attributes:
+      label: Where the answer goes
+      description: >
+        Which issue or file records the measurement, so nobody investigates
+        this twice.
+    validations: { required: true }

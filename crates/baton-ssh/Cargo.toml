@@ -1,0 +1,12 @@
+[package]
+name = "baton-ssh"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+baton-core = { path = "../baton-core" }
+baton-platform = { path = "../baton-platform" }
+tokio = { workspace = true }
+thiserror = { workspace = true }

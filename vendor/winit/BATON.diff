@@ -1,0 +1,292 @@
+--- winit-0.30.13/src/platform_impl/macos/view.rs
++++ vendor/winit/src/platform_impl/macos/view.rs
+@@ -122,6 +122,34 @@
+     ime_state: Cell<ImeState>,
+     input_source: RefCell<String>,
+ 
++    /// True if this view was in a preedit session that will result in a commit.
++    pending_commit: Cell<bool>,
++
++    /// BATON: the in-flight composition. **Owned by winit.**
++    ///
++    /// The macOS Korean input method does not use `setMarkedText` (preedit).
++    /// It composes jamo into syllables with `insertText:` plus a
++    /// `replacementRange`: insert a character, read it back, replace it. That
++    /// needs the client to expose its document, but upstream answers
++    /// `selectedRange` -> `{NSNotFound, 0}` and
++    /// `attributedSubstringForProposedRange:` -> `None`, so the input method
++    /// cannot use that model and **the first jamo never joins the
++    /// composition**.
++    ///
++    /// We expose **only the in-flight composition** as the document. Every
++    /// replacement request then lands inside this buffer, we absorb it, and the
++    /// application sees nothing but ordinary `Preedit` / `Commit`. Neither
++    /// `iced` nor the app has to change.
++    composing: RefCell<String>,
++
++    /// BATON: how much of `composing` (the document the input method believes
++    /// in) has already gone to the app as `Commit`, in UTF-16 units.
++    ///
++    /// This is why the document is never cleared on commit: clearing it desyncs
++    /// our offsets from the input method's, and the next syllable's replacement
++    /// lands in the wrong place. Measured.
++    committed_utf16: Cell<usize>,
++
+     /// True iff the application wants IME events.
+     ///
+     /// Can be set using `set_ime_allowed`
+@@ -262,8 +290,12 @@
+         #[method(selectedRange)]
+         fn selected_range(&self) -> NSRange {
+             trace_scope!("selectedRange");
+-            // Documented to return `{NSNotFound, 0}` if there is no selection.
+-            NSRange::new(NSNotFound as NSUInteger, 0)
++            // BATON (upstream #4666): the original returns `{NSNotFound, 0}`,
++            // which macOS reads as "no valid insertion point" and then gives up
++            // on both composition and dictation. Report the caret at the end of
++            // the in-flight composition instead.
++            let len = self.ivars().composing.borrow().encode_utf16().count();
++            NSRange::new(len as NSUInteger, 0)
+         }
+ 
+         #[method(setMarkedText:selectedRange:replacementRange:)]
+@@ -310,6 +342,7 @@
+                 // In case the preedit was cleared, set IME into the Ground state.
+                 self.ivars().ime_state.set(ImeState::Ground);
+             }
++            self.ivars().pending_commit.set(true);
+ 
+             let cursor_range = if string.is_empty() {
+                 // An empty string basically means that there's no preedit, so indicate that by
+@@ -354,7 +387,9 @@
+         #[method_id(validAttributesForMarkedText)]
+         fn valid_attributes_for_marked_text(&self) -> Retained<NSArray<NSAttributedStringKey>> {
+             trace_scope!("validAttributesForMarkedText");
+-            NSArray::new()
++            let underline_style = NSString::from_str("NSUnderlineStyle");
++            let marked_clause = NSString::from_str("NSMarkedClauseSegment");
++            NSArray::from_id_slice(&[underline_style, marked_clause])
+         }
+ 
+         #[method_id(attributedSubstringForProposedRange:actualRange:)]
+@@ -364,7 +399,17 @@
+             _actual_range: *mut NSRange,
+         ) -> Option<Retained<NSAttributedString>> {
+             trace_scope!("attributedSubstringForProposedRange:actualRange:");
+-            None
++            // BATON: the original returns `None`, i.e. "the document cannot be
++            // read". Expose only the in-flight composition: a terminal grid is
++            // not the input method's document, so there is no reason to show
++            // anything else, and this keeps every replacement request inside
++            // the range we hold.
++            let ctx = self.ivars().composing.borrow();
++            let units: Vec<u16> = ctx.encode_utf16().collect();
++            let start = (_range.location as usize).min(units.len());
++            let end = start.saturating_add(_range.length).min(units.len());
++            let ns = NSString::from_str(&String::from_utf16_lossy(&units[start..end]));
++            Some(NSAttributedString::from_nsstring(&ns))
+         }
+ 
+         #[method(characterIndexForPoint:)]
+@@ -390,8 +435,8 @@
+         }
+ 
+         #[method(insertText:replacementRange:)]
+-        fn insert_text(&self, string: &NSObject, _replacement_range: NSRange) {
+-            // TODO: Use _replacement_range, requires changing the event to report surrounding text.
++        fn insert_text(&self, string: &NSObject, replacement_range: NSRange) {
++            // BATON: we actually use replacementRange; upstream has a TODO.
+             trace_scope!("insertText:replacementRange:");
+ 
+             // SAFETY: This method is guaranteed to get either a `NSString` or a `NSAttributedString`.
+@@ -407,12 +452,22 @@
+ 
+             let is_control = string.chars().next().is_some_and(|c| c.is_control());
+ 
+-            // Commit only if we have marked text.
+-            if unsafe { self.hasMarkedText() } && self.is_ime_enabled() && !is_control {
+-                self.queue_event(WindowEvent::Ime(Ime::Preedit(String::new(), None)));
+-                self.queue_event(WindowEvent::Ime(Ime::Commit(string)));
+-                self.ivars().ime_state.set(ImeState::Committed);
++            // ── BATON: absorb the insert-then-replace model here ──────────
++            // What the macOS Korean input method actually sends (measured):
++            //   insertText("ㅎ")              start of a composition
++            //   insertText("하", repl=(0,1))  replace what was just inserted
++            //   insertText("한", repl=(0,1))  replace again
++            //   insertText(" ")               outside it; the previous commits
++            // We hold the composition and surface only standard
++            // Preedit / Commit events.
++            if self.ivars().ime_allowed.get()
++                && !is_control
++                && self.handle_composing_insert(&string, replacement_range)
++            {
++                return;
+             }
++
++            self.insert_text_fallback(string, is_control);
+         }
+ 
+         // Basically, we're sent this message whenever a keyboard event that doesn't generate a "human
+@@ -782,8 +837,141 @@
+         }
+     }
+ );
++
++
++/// BATON: can the input method still come back and replace this text?
++///
++/// Only Hangul jamo and syllables are held. Latin letters, digits and
++/// punctuation are never revised by the Korean input method, so they go out
++/// immediately -- **this is why typing English has no one-character lag.**
++fn is_composing_script(s: &str) -> bool {
++    !s.is_empty()
++        && s.chars().all(|c| {
++            matches!(c as u32,
++                0x1100..=0x11FF |   // Hangul Jamo
++                0x3130..=0x318F |   // Compatibility Jamo
++                0xA960..=0xA97F |   // Jamo Extended-A
++                0xAC00..=0xD7A3 |   // Syllables
++                0xD7B0..=0xD7FF     // Jamo Extended-B
++            )
++        })
++}
+ 
+ impl WinitView {
++
++    /// BATON: handle an insert or replace during composition. `true` if
++    /// handled.
++    ///
++    /// **The model.** `composing` is the document the input method believes in.
++    /// It remembers everything it inserted, cumulatively, and asks for
++    /// replacements in those coordinates -- so we have to hold the same
++    /// document. `committed_utf16` marks how much of it already went to the
++    /// app, and the remaining tail is the preedit. The only events that leave
++    /// here are standard `Preedit` / `Commit`.
++    fn handle_composing_insert(&self, string: &str, repl: NSRange) -> bool {
++        let has_repl = repl.location != NSNotFound as NSUInteger;
++        let mut doc = self.ivars().composing.borrow_mut();
++
++        if has_repl {
++            let units: Vec<u16> = doc.encode_utf16().collect();
++            let start = (repl.location as usize).min(units.len());
++            let end = start.saturating_add(repl.length).min(units.len());
++            // A request to replace text we already committed cannot be
++            // honoured. In practice the input method only touches the last
++            // syllable, so this does not trigger.
++            if start < self.ivars().committed_utf16.get() {
++                tracing::warn!(
++                    "BATON: asked to replace committed text at {start}; ignoring"
++                );
++                return false;
++            }
++            let mut next = String::from_utf16_lossy(&units[..start]);
++            next.push_str(string);
++            next.push_str(&String::from_utf16_lossy(&units[end..]));
++            *doc = next;
++        } else {
++            let len16 = doc.encode_utf16().count();
++            let committed = self.ivars().committed_utf16.get();
++            let pending = len16 > committed;
++
++            // **Nothing in flight and nothing composable: touch nothing.**
++            // Latin, digits and punctuation take exactly the upstream path, so
++            // there is no lag and `KeyboardInput` still arrives.
++            if !pending && !is_composing_script(string) {
++                return false;
++            }
++
++            // Not a replacement, so the previous composition is final.
++            if pending {
++                let units: Vec<u16> = doc.encode_utf16().collect();
++                let tail = String::from_utf16_lossy(&units[committed..]);
++                self.queue_event(WindowEvent::Ime(Ime::Preedit(String::new(), None)));
++                self.queue_event(WindowEvent::Ime(Ime::Commit(tail)));
++                self.ivars().committed_utf16.set(len16);
++            }
++
++            // Keep the document, but reset the session if it grows large so
++            // offsets stay bounded.
++            if doc.encode_utf16().count() > 4096 {
++                doc.clear();
++                self.ivars().committed_utf16.set(0);
++            }
++
++            if !is_composing_script(string) {
++                // A space, letter or punctuation mark **immediately after** a
++                // composition. The state transition suppresses the raw key
++                // (`had_ime_input`), so send this character as a `Commit`; it
++                // then arrives exactly once.
++                doc.push_str(string);
++                self.ivars().committed_utf16.set(doc.encode_utf16().count());
++                self.ivars().ime_state.set(ImeState::Committed);
++                self.queue_event(WindowEvent::Ime(Ime::Commit(string.to_owned())));
++                return true;
++            }
++            doc.push_str(string);
++        }
++
++        let committed = self.ivars().committed_utf16.get();
++        let units: Vec<u16> = doc.encode_utf16().collect();
++        let preedit = String::from_utf16_lossy(&units[committed.min(units.len())..]);
++        tracing::warn!(
++            "BATON insert {:?} repl=({}, {}) -> doc={:?} committed={} preedit={:?}",
++            string,
++            repl.location as i64,
++            repl.length,
++            doc.clone(),
++            committed,
++            preedit
++        );
++        drop(doc);
++
++        if self.ivars().ime_state.get() == ImeState::Disabled {
++            *self.ivars().input_source.borrow_mut() = self.current_input_source();
++            self.queue_event(WindowEvent::Ime(Ime::Enabled));
++        }
++        self.ivars().ime_state.set(ImeState::Preedit);
++        let caret = preedit.len();
++        self.queue_event(WindowEvent::Ime(Ime::Preedit(preedit, Some((caret, caret)))));
++        true
++    }
++
++    /// BATON: the upstream `insertText` path, for text unrelated to
++    /// composition (upstream #4650).
++    fn insert_text_fallback(&self, string: String, is_control: bool) {
++        let has_marked = unsafe { self.hasMarkedText() };
++        let pending_commit = self.ivars().pending_commit.get();
++        let ime_enabled = self.is_ime_enabled();
++
++        if has_marked {
++            self.queue_event(WindowEvent::Ime(Ime::Preedit(String::new(), None)));
++        }
++
++        if pending_commit && ime_enabled && !is_control {
++            self.ivars().pending_commit.set(false);
++            self.queue_event(WindowEvent::Ime(Ime::Commit(string)));
++            self.ivars().ime_state.set(ImeState::Committed);
++        }
++    }
+     pub(super) fn new(
+         app_delegate: &ApplicationDelegate,
+         window: &WinitWindow,
+@@ -801,6 +989,9 @@
+             tracking_rect: Default::default(),
+             ime_state: Default::default(),
+             input_source: Default::default(),
++            pending_commit: Default::default(),
++            composing: Default::default(),
++            committed_utf16: Default::default(),
+             ime_allowed: Default::default(),
+             forward_key_to_app: Default::default(),
+             marked_text: Default::default(),
+@@ -888,6 +1079,10 @@
+ 
+         // Clear markedText
+         *self.ivars().marked_text.borrow_mut() = NSMutableAttributedString::new();
++        self.ivars().pending_commit.set(false);
++        // BATON: clear the composition document and the commit mark together.
++        self.ivars().composing.borrow_mut().clear();
++        self.ivars().committed_utf16.set(0);
+ 
+         if self.ivars().ime_state.get() != ImeState::Disabled {
+             self.ivars().ime_state.set(ImeState::Disabled);

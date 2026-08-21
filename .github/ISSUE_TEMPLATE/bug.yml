@@ -1,0 +1,64 @@
+name: Bug report
+description: Something in Baton is broken
+labels: ["type:bug", "needs:triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting. Please do not paste hostnames, usernames, IP
+        addresses, or anything out of `~/.ssh/`. Baton never sends this
+        anywhere, and neither should a bug report - redact freely, the shape of
+        the problem is what matters.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations: { required: true }
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: >
+        The smallest sequence that shows it. If it involves a specific command
+        producing specific output, say which.
+      value: |
+        1. 
+        2. 
+        3. 
+    validations: { required: true }
+  - type: input
+    id: version
+    attributes:
+      label: Baton version
+      description: From `baton --version`, or the commit you built.
+    validations: { required: true }
+  - type: input
+    id: os
+    attributes:
+      label: macOS version
+      description: >
+        Baton is a macOS-only client for now. Please say which version.
+    validations: { required: true }
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where does it show up
+      options:
+        - Terminal rendering (colours, glyph widths, box drawing, cursor)
+        - Text input (IME, keyboard, paste)
+        - Splits, tabs, or resizing
+        - SSH connection (auth, jump hosts, reconnect)
+        - Host list, groups, or inheritance
+        - Command palette
+        - Performance (lag, fan spinning, memory)
+        - Something else
+    validations: { required: true }
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: >
+        Screenshots help a lot for rendering problems. For a crash, the log
+        from `Reveal Log` in the command palette - check it for anything you
+        would rather not publish first.

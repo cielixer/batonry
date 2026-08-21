@@ -5,3 +5,6 @@ contact_links:
     about: >
       Open a decision issue instead of arguing in a ticket comment. A decision
       lives in one place so that "why is it like this" has one answer.
+  - name: Question, or not sure it is a bug
+    url: https://github.com/cielixer/batonry/discussions
+    about: Ask here first. No template, no triage.

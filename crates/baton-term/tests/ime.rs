@@ -115,19 +115,32 @@ fn recording_from_before_the_fix_shows_the_broken_composition() {
 
 /// Guards the build configuration itself.
 ///
-/// The replay tests above pass even with the patch removed -- fixtures are
-/// files. Without this, a PR that deletes `[patch.crates-io]` goes green and
-/// Korean input silently breaks again.
+/// The replay tests above pass even with the fork removed -- fixtures are
+/// files. Without this, a PR that points `iced` back at crates.io goes green
+/// and Korean input silently breaks again.
 #[test]
-fn winit_ime_patch_is_wired_up() {
+fn winit_ime_fix_is_wired_up() {
     let manifest = std::fs::read_to_string("../../Cargo.toml")
         .expect("workspace manifest");
     assert!(
-        manifest.contains("[patch.crates-io]")
-            && manifest.contains("winit = { path = \"crates/baton-winit\" }"),
-        "the workspace no longer patches crates/baton-winit, so the published \
-         winit is in use and the first Hangul jamo is dropped again"
+        manifest.contains("path = \"crates/baton-iced\"")
+            && manifest.contains("package = \"baton-iced\""),
+        "the workspace no longer depends on crates/baton-iced, so the published \
+         iced -> iced_winit -> winit chain is in use and the first Hangul jamo \
+         is dropped again"
     );
+    for (crate_dir, dep, pkg) in [
+        ("baton-iced", "iced_winit", "baton-iced-winit"),
+        ("baton-iced-winit", "winit", "baton-winit"),
+    ] {
+        let m = std::fs::read_to_string(format!("../{crate_dir}/Cargo.toml"))
+            .unwrap_or_else(|_| panic!("crates/{crate_dir}/Cargo.toml"));
+        assert!(
+            m.contains(&format!("package = \"{pkg}\"")),
+            "crates/{crate_dir} no longer redirects its `{dep}` dependency to \
+             {pkg}; the chain falls back to crates.io"
+        );
+    }
 
     let view = std::fs::read_to_string(
         "../baton-winit/src/platform_impl/macos/view.rs",

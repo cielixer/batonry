@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
-exclude = ["crates/baton-winit"]
+exclude = ["crates/baton-winit", "crates/baton-iced-winit", "crates/baton-iced"]
 
 [workspace.package]
 edition = "2024"
@@ -12,7 +12,12 @@ rust-version = "1.93"
 
 [workspace.dependencies]
 # UI. Declarative (Elm), wgpu backend.
-iced = { version = "0.14.0", features = ["canvas", "lazy", "advanced", "tokio"] }
+iced = { path = "crates/baton-iced", package = "baton-iced", features = [
+    "canvas",
+    "lazy",
+    "advanced",
+    "tokio",
+] }
 iced_core = "0.14.0"
 iced_graphics = { version = "0.14.0", default-features = false }
 iced_test = "0.14.0"
@@ -39,35 +44,3 @@ debug = 1 # keep symbols: we profile release builds
 
 [profile.bench]
 debug = 1
-
-# Korean input on macOS does not work with the published winit.
-#
-# The macOS Korean input method composes jamo into syllables by calling
-# `insertText:` with a `replacementRange` -- it inserts a character, then
-# reads it back and replaces it. That requires the client to expose its
-# document through `selectedRange` and
-# `attributedSubstringForProposedRange:`. winit 0.30.13 answers
-# `{NSNotFound, 0}` and `None`, so the input method cannot use that model
-# and drops the first jamo: typing "한글" produces "ㅎㅏㄴ글".
-#
-# `crates/baton-winit` fixes it. Our delta is its `UPSTREAM.diff` and the
-# reasoning is its `NOTICE.md`. This is a path dependency, not a git
-# dependency, so builds stay hermetic.
-#
-# Two things about that crate look wrong and are not: its package name is still
-# `winit` (patch substitutes by package name, so renaming it makes cargo fall
-# back to the published crate), and it is excluded from the workspace (so fmt,
-# clippy and test do not descend into 57k lines of third-party code).
-#
-# Verified necessary, not assumed. With a winit-only probe -- no iced, no widget
-# of ours -- typing g k s r m f on a 2-Set Korean layout gives:
-#   published winit 0.30.13          -> "ㅎㅏㄴ글"
-#   plus upstream PR #4650 and #4666 -> "ㅎㅏㄴ글"   (upstream's own fix is not enough)
-#   crates/baton-winit               -> "한글"
-# winit exposes only three IME setters and no way to hand it surrounding text,
-# so this cannot be fixed above winit.
-#
-# Removing this section re-breaks Korean input. A test asserts it is here:
-# crates/baton-term/tests/ime.rs
-[patch.crates-io]
-winit = { path = "crates/baton-winit" }

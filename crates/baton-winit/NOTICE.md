@@ -1,8 +1,16 @@
 # `crates/baton-winit` -- why this is here
 
 A copy of `winit` 0.30.13 (Apache-2.0) with macOS Korean input fixed.
-`[patch.crates-io]` points the whole workspace, including `iced`, at this copy.
-It is a **path** dependency, not a git dependency, so builds stay hermetic.
+
+It reaches our crates through two thin hardcopies rather than
+`[patch.crates-io]`:
+
+    our crates -> baton-iced -> baton-iced-winit -> baton-winit
+
+Each arrow is a renamed path dependency, so every crate we maintain carries our
+own name and the source of all three is verbatim upstream. Builds stay hermetic
+(no git dependencies). Why not `[patch]`: see
+[`../baton-iced-winit/NOTICE.md`](../baton-iced-winit/NOTICE.md).
 
 - Upstream: crates.io `winit 0.30.13`
 - Licence: Apache-2.0 (upstream `LICENSE` preserved verbatim)
@@ -26,23 +34,9 @@ nothing else.
 
 ## Two things that look wrong and are not
 
-**The package is still called `winit`,** even though the directory is
-`baton-winit`. `[patch.crates-io]` substitutes by package identity: the crate
-graph asks for `winit`, so only a package named `winit` can satisfy it. Both
-renaming attempts were tried and both fail the same way --
-
-    [patch.crates-io]
-    winit = { path = "crates/baton-winit", package = "baton-winit" }
-    baton-winit = { path = "crates/baton-winit" }
-
--- cargo emits `patch ... was not used in the crate graph` and then quietly
-resolves the published winit instead. That is the dangerous part: the build
-succeeds and Korean input is broken again.
-
-The only way to give this crate our own package name would be to fork
-`iced_winit` as well, where `winit = { path = "...", package = "baton-winit" }`
-is legal in `[dependencies]`. That trades one patch line for a second fork of a
-crate that has to be re-forked on every iced release. Not worth it.
+**The package is named `baton-winit`, not `winit`.** Dependents refer to it as
+`winit` through a renamed dependency, so upstream's `use winit::...` keeps
+working and nothing in `src/` had to change for the rename.
 
 **It is excluded from the workspace** (`exclude` in the root `Cargo.toml`).
 Otherwise `cargo fmt`, `cargo clippy -D warnings` and `cargo test --workspace`

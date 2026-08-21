@@ -1,3 +1,0 @@
-# Same values as iced_term's clippy.toml, for the same reason as rustfmt.toml.
-too-many-arguments-threshold = 20
-enum-variant-name-threshold = 10

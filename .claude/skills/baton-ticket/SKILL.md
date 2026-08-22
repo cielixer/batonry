@@ -44,8 +44,10 @@ consequence.
        git switch -c m1/stage<N>-<slug>
 
 4. Open the ledger at
-   `.claude/skills/codex/state/<key>.ledger.md` (gitignored, survives across
-   sessions for this ticket). If one exists, read it -- you may be resuming.
+   `.claude/skills/codex/state/ticket-<n>.ledger.md` -- gitignored, one per
+   ticket, and deliberately **not** keyed like the Codex threads: resetting a
+   thread rebuilds context, it does not erase what happened. If a ledger
+   already exists, read it; you may be resuming someone's afternoon.
 
 ## Never touch
 

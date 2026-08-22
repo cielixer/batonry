@@ -62,6 +62,12 @@ role_config() {
 #
 # Sanitised for readability plus a checksum, so two targets that sanitise to
 # the same string ("a/b" and "a__b") still get separate state.
+#
+# The key also carries the prompt name, because one ticket legitimately gets
+# more than one Codex thread: a plan review before implementation and a code
+# review after are the same role on the same target but must not share a
+# thread. Without this, reviewing the diff for #16 would resume the
+# conversation that reviewed its plan.
 target_key() {
     local t="$1" resolved sanitized sum
     if [ -e "$t" ]; then
@@ -175,23 +181,46 @@ case "$PROMPT_NAME" in
     */*|..*) die "--prompt takes a template name, not a path (got '$PROMPT_NAME')" ;;
 esac
 
-KEY="$(target_key "$TARGET")"
+BASEKEY="$(target_key "$TARGET")"
+KEY="$BASEKEY.${PROMPT_NAME:-${ROLE:-none}}"
 THREAD="$STATE_DIR/$KEY.thread"
 OUT="$STATE_DIR/$KEY.out.txt"
 EVENTS="$STATE_DIR/$KEY.events.ndjson"
 
 case "$ACTION" in
 show)
+    if [ -z "$PROMPT_NAME" ] && [ -z "$ROLE" ]; then
+        found=""
+        for f in "$STATE_DIR/$BASEKEY".*.out.txt; do
+            [ -e "$f" ] || continue
+            name="${f##*/}"; name="${name%.out.txt}"; found="$found ${name##*.}"
+        done
+        [ -n "$found" ] || die "nothing on file for $TARGET"
+        set -- $found
+        if [ $# -gt 1 ]; then
+            echo "several threads exist for $TARGET:$found" >&2
+            echo "pick one, e.g. --prompt $1" >&2
+            exit 64
+        fi
+        KEY="$BASEKEY.$1"
+        OUT="$STATE_DIR/$KEY.out.txt"; THREAD="$STATE_DIR/$KEY.thread"
+        echo "prompt: $1"
+    fi
     [ -f "$OUT" ] || die "nothing on file for $TARGET"
     [ -f "$THREAD" ] && echo "thread: $(cat "$THREAD")"
-    echo "output: $OUT"; echo "---"; cat "$OUT" ;;
+    echo "output: $OUT"; echo "---"; cat "$OUT"
+    exit 0 ;;
 
 reset)
+    # Every thread for this target, not just one prompt's: "reset #16" means
+    # forget #16.
     n=0
-    for f in "$THREAD" "$OUT" "$EVENTS" "$EVENTS.stderr"; do
-        [ -f "$f" ] && { rm -- "$f"; echo "removed $f"; n=$((n+1)); }
+    for f in "$STATE_DIR/$BASEKEY".*; do
+        [ -e "$f" ] || continue
+        rm -- "$f"; echo "removed $f"; n=$((n+1))
     done
-    [ "$n" = 0 ] && echo "no state on file for $TARGET" ;;
+    [ "$n" = 0 ] && echo "no state on file for $TARGET"
+    exit 0 ;;
 
 start)
     command -v codex >/dev/null || die "codex not on PATH"

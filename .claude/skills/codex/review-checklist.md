@@ -86,14 +86,23 @@ Also structural, from sections 2 and 7c:
 
 ## Out of scope
 
-**Test code.** The requester writes and owns the tests and runs the gate before
-calling the review. Do not review test quality and do not hunt for coverage
-gaps -- say in prose if a behaviour clearly needs one.
+**Coverage.** Whether a behaviour needs a test is the requester's call. Do not
+hunt for gaps; say in prose if one is glaring.
+
+**Test validity is not out of scope.** The requester is the only author and the
+only reviewer of this suite, which is a single point of failure, and a first pass
+through this workflow shipped a dead loop and a pointless fixture in
+requester-written tests. Flag an assertion that cannot fail, a branch nothing
+reaches, a fixture that proves nothing, and any claim that a regression was
+"verified by reintroducing the bug" where the test would obviously still pass.
+Grade these like any other finding.
 
 **Formatting and lint.** `cargo fmt --all --check` and
 `cargo clippy --workspace --all-targets -- -D warnings` ran and passed before
 this review started.
 
-**Upstream code.** Anything in a copied crate that matches upstream is not this
-change's problem. A *diff* against upstream in one of the three verbatim crates
-is, because it should not exist.
+**Upstream code.** The three copied crates are **frozen**, not identical to
+upstream -- `baton-winit` carries a deliberate IME patch, recorded line by line
+in its `UPSTREAM.diff`. Code there that this branch did not touch is not this
+change's problem. A change this branch *makes* there is, because there should be
+none.

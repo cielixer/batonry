@@ -12,10 +12,11 @@ miss.
 ## See the change
 
     git status -s
-    git diff HEAD          # staged + unstaged against the last commit
+    BASE=$(git merge-base main HEAD)
+    git diff "$BASE"       # committed *and* uncommitted, against the branch point
 
-If `git diff HEAD` is empty the work is already committed -- use
-`git diff main...HEAD` instead.
+Use that base, not `git diff HEAD`. A branch can hold committed and uncommitted
+work at once, and `HEAD` shows you only half of it.
 
 ## Read first
 
@@ -45,14 +46,22 @@ If `git diff HEAD` is empty the work is already committed -- use
 
 ## Do not flag
 
-- Missing tests or test quality. The requester owns the test suite and runs the
-  gate; test code is deliberately outside your scope.
+- **Coverage.** Whether something needs a test, and how much, is the requester's
+  call. Do not hunt for gaps.
+
+  **Test validity is in scope**, though, and it matters here because the
+  requester is the only author *and* the only reviewer of the suite: an
+  assertion that cannot fail, a branch nothing reaches, a fixture that proves
+  nothing, or a claim that a regression was "verified by reintroducing the bug"
+  where the test would plainly still pass. Say so when you see it.
 - Style or formatting. `cargo fmt` and clippy already decide this, and both ran
   before you were called.
-- Anything inside `crates/baton-winit`, `crates/baton-iced`, or
-  `crates/baton-iced-winit` that matches upstream. Those are verbatim copies;
-  upstream's choices are not this change's problem. Do flag a *diff* against
-  upstream in those directories, because it should not exist.
+- Anything in `crates/baton-winit`, `crates/baton-iced` or
+  `crates/baton-iced-winit` that this branch did not change. Those are **frozen**
+  copies -- not identical to upstream, since `baton-winit` carries a deliberate
+  IME patch recorded in its `UPSTREAM.diff`, but frozen. Upstream's choices are
+  not this change's problem. Do flag any change this branch makes there, because
+  there should be none.
 - Theoretical edge cases that real input does not produce.
 - A finding the implementer already addressed or pushed back on with a reason.
 

@@ -63,10 +63,12 @@ cargo test  --workspace
 ```
 
 Three crates under `crates/` are copies of upstream libraries rather than
-dependencies, because Cargo cannot rename a patched package. Each one carries a
-`NOTICE.md` explaining why it is there and an `UPSTREAM.diff` holding our
-changes. They are excluded from the workspace and must not be reformatted — the
-diffs depend on them staying byte-identical to upstream.
+dependencies, because Cargo cannot rename a patched package. Each carries a
+`NOTICE.md` explaining why it is there and an `UPSTREAM.diff` recording our
+divergence line by line — two are unmodified apart from one dependency line, and
+`baton-winit` holds the macOS input fix. They are excluded from the workspace and
+must not be reformatted: the diffs are only readable while the surrounding code
+stays put.
 
 ## Contributing
 

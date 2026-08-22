@@ -66,11 +66,41 @@ pub static EVENTS_DROPPED: AtomicU64 = AtomicU64::new(0);
 /// Sends that failed because the receiver was gone. **Not data loss** --
 /// this is how a pane closes.
 pub static CHANNEL_CLOSED: AtomicU64 = AtomicU64::new(0);
-/// Events currently sitting in the unbounded queue.
+/// Events currently sitting in the unbounded queue. A **gauge**, not a
+/// counter: `queue_push` raises it and `queue_pop` lowers it.
+///
+/// Use those two functions rather than touching it directly. It is the only
+/// number here that can go both ways, and `reset()` can land between a push
+/// and its matching pop -- a `Terminal` from a finished test still has a
+/// detached alacritty "PTY reader" thread alive, so its events can be drained
+/// after the counter has been zeroed. A bare `fetch_sub` then wraps to
+/// `u64::MAX` and the next `fetch_add(1) + 1` **panics on overflow in a debug
+/// build**, killing the reader thread. That was observed: it turned into a
+/// truncated event stream and a failing assertion two tests later.
+///
+/// Instrumentation must not be able to take down the thread it measures, so
+/// both ends saturate.
 pub static EVENTS_QUEUED: AtomicU64 = AtomicU64::new(0);
 /// High-water mark of the above. **This is the evidence that the unbounded
 /// path is actually safe** -- it has to stay small.
 pub static EVENTS_QUEUE_MAX: AtomicU64 = AtomicU64::new(0);
+
+/// Record one event entering the unbounded queue, and update the high-water
+/// mark. Saturates instead of wrapping; see `EVENTS_QUEUED`.
+pub fn queue_push() {
+    let depth = EVENTS_QUEUED
+        .fetch_update(Relaxed, Relaxed, |v| Some(v.saturating_add(1)))
+        .unwrap_or(0)
+        .saturating_add(1);
+    EVENTS_QUEUE_MAX.fetch_max(depth, Relaxed);
+}
+
+/// Record one event leaving the unbounded queue. Saturates at zero instead of
+/// wrapping; see `EVENTS_QUEUED`.
+pub fn queue_pop() {
+    let _ = EVENTS_QUEUED
+        .fetch_update(Relaxed, Relaxed, |v| Some(v.saturating_sub(1)));
+}
 /// Backend commands processed.
 pub static COMMANDS: AtomicU64 = AtomicU64::new(0);
 /// Cell count seen on the last draw (cols x rows).

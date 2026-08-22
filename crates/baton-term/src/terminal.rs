@@ -163,10 +163,7 @@ fn terminal_subscription_stream(
                 biased;
                 ev = events.recv() => match ev {
                     Some(ev) => {
-                        crate::metrics::EVENTS_QUEUED.fetch_sub(
-                            1,
-                            std::sync::atomic::Ordering::Relaxed,
-                        );
+                        crate::metrics::queue_pop();
                         ev
                     },
                     // All senders gone: the backend is finished.

@@ -662,8 +662,7 @@ impl EventListener for EventProxy {
             crate::metrics::CHANNEL_CLOSED.fetch_add(1, Relaxed);
             return;
         }
-        let depth = crate::metrics::EVENTS_QUEUED.fetch_add(1, Relaxed) + 1;
-        crate::metrics::EVENTS_QUEUE_MAX.fetch_max(depth, Relaxed);
+        crate::metrics::queue_push();
     }
 }
 

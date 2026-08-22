@@ -5,7 +5,11 @@ dependency line**: it takes `iced_winit` from `crates/baton-iced-winit` instead
 of crates.io.
 
 - Upstream: crates.io `iced 0.14.0`
-- Licence: MIT, same as upstream
+- Licence: **MIT, Copyright 2019 Hector Ramon, Iced contributors.** The upstream
+  notice is preserved verbatim in this crate's [`LICENSE`](LICENSE), which governs
+  this directory; the repository's root `LICENSE` covers our own code. The
+  published crate ships no licence file of its own -- one `LICENSE` at the root of
+  the iced repository covers every member crate, and that is the file copied here
 - Our delta: `UPSTREAM.diff` -- Cargo.toml only, no source file touched
 
 This is the last link in the chain that carries the patched winit down to our

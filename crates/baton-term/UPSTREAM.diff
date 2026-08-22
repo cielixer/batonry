@@ -43,6 +43,14 @@ What we changed and why:
                 a pane shuts down, not a bug. Added `dump_grid()`, which
                 is the canonical correctness oracle for rendering.
 
+  * metrics.rs  The queue-depth gauge saturates at both ends instead of
+                wrapping. It is read by the PTY reader thread, and an
+                unmatched decrement used to wrap to u64::MAX and make the
+                next increment overflow -- which panics in a debug build
+                and kills that thread. Instrumentation must not be able
+                to take down the thread it measures.
+                Regression test: crates/baton-term/tests/deadlock.rs
+
 =======================================================================
 --- iced_term-0.8.0/src/backend.rs
 +++ baton-term/src/backend.rs
@@ -147,7 +155,7 @@ What we changed and why:
      pub fn renderable_content(&self) -> &RenderableContent {
          &self.last_content
      }
-@@ -575,11 +614,61 @@
+@@ -575,11 +614,60 @@
      }
  }
  
@@ -201,8 +209,7 @@ What we changed and why:
 +            crate::metrics::CHANNEL_CLOSED.fetch_add(1, Relaxed);
 +            return;
 +        }
-+        let depth = crate::metrics::EVENTS_QUEUED.fetch_add(1, Relaxed) + 1;
-+        crate::metrics::EVENTS_QUEUE_MAX.fetch_max(depth, Relaxed);
++        crate::metrics::queue_push();
      }
  }
 +
@@ -224,6 +231,9 @@ What we changed and why:
  pub mod settings;
  
  mod backend;
+--- /dev/null
++++ baton-term/src/metrics.rs
+(new file, ours entirely)
 --- iced_term-0.8.0/src/terminal.rs
 +++ baton-term/src/terminal.rs
 @@ -5,6 +5,7 @@
@@ -314,7 +324,7 @@ What we changed and why:
  }
  
  impl Hash for TerminalSubscriptionData {
-@@ -131,29 +151,98 @@
+@@ -131,29 +151,95 @@
      let id = data.id;
      let event_receiver = data.event_receiver.clone();
      iced::stream::channel(1000, async move |mut output| {
@@ -344,10 +354,7 @@ What we changed and why:
 +                biased;
 +                ev = events.recv() => match ev {
 +                    Some(ev) => {
-+                        crate::metrics::EVENTS_QUEUED.fetch_sub(
-+                            1,
-+                            std::sync::atomic::Ordering::Relaxed,
-+                        );
++                        crate::metrics::queue_pop();
 +                        ev
 +                    },
 +                    // All senders gone: the backend is finished.

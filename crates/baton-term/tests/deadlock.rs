@@ -330,3 +330,38 @@ fn write_path_sends_raw_bytes_without_newline() {
     )));
     assert!(matches!(action, Action::Ignore));
 }
+
+/// Instrumentation must not be able to kill the thread it measures.
+///
+/// `EVENTS_QUEUED` is a gauge, and `metrics::reset()` can land between a push
+/// and its matching pop: a finished `Terminal` leaves alacritty's detached
+/// "PTY reader" thread alive, so its events get drained after the next test has
+/// already zeroed the counter. With a wrapping `fetch_sub` the gauge goes to
+/// `u64::MAX` and the following `fetch_add(1) + 1` **panics on overflow in a
+/// debug build**, taking the reader thread with it.
+///
+/// That is not hypothetical -- it is why
+/// `wakeup_channel_overflow_is_coalescing_not_loss` failed intermittently under
+/// `cargo test --workspace`: the reader died mid-load, output stopped, and the
+/// missing titles showed up as an assertion failure in a *different* test.
+#[test]
+fn queue_gauge_survives_a_reset_between_push_and_pop() {
+    let _guard = serial();
+    metrics::reset();
+
+    metrics::queue_push();
+    metrics::reset(); // the pop below is now unmatched
+    metrics::queue_pop(); // wrapping would land on u64::MAX here
+    assert_eq!(
+        metrics::EVENTS_QUEUED.load(Relaxed),
+        0,
+        "the gauge went below zero instead of saturating"
+    );
+
+    metrics::queue_push(); // and this would overflow and panic
+    assert_eq!(metrics::EVENTS_QUEUED.load(Relaxed), 1);
+    metrics::queue_pop();
+    assert_eq!(metrics::EVENTS_QUEUED.load(Relaxed), 0);
+
+    metrics::reset();
+}

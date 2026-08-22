@@ -92,11 +92,35 @@ argued with rather than used.
 
 ## 3. Commit and open the PR
 
-Squash the batch checkpoints into commits that each say why, not what. The
-message is prose someone reads in a year -- what changed for a person using the
-app, and what the alternative was.
+**The branch is squash-merged, so exactly one commit reaches `main` per ticket**
+and it is the only text anyone reads in `git log`. Squash merging is the only
+button the repository offers; merge commits and rebase merges are disabled.
 
-    Refs #<n>          # in the message of any commit that is not the last
+Two consequences worth holding onto:
+
+- **The body does not write itself.** The repository is configured to leave a
+  squash commit's body **blank** rather than pasting the PR template or a bullet
+  list of the batch checkpoints, both of which are noise in `git log`. So the
+  message is written deliberately, in the voice the existing history uses:
+  prose, several paragraphs, what changed for a person using the app and what
+  the alternative was. The title carries the milestone and stage, which is what
+  makes a `git log --oneline` spanning two milestones readable:
+
+      m1/stage1: action registry with stable ids and a named-source merge
+
+  GitHub appends ` (#<pr>)`. Do not use Conventional Commits — nothing here
+  consumes them, and the existing history is prose.
+
+- **Branch every ticket off `main`, never off another ticket's branch.** A
+  squash merge means the branch's own commits never become ancestors of `main`,
+  so a branch stacked on a squash-merged branch carries content that now exists
+  twice and rebases badly. Stage 1 has dependent tickets (#11 needs #10, #15
+  needs #10, #11 and #14) — wait for the dependency to merge. At half a day to
+  three days per ticket, with one person, serial is the normal case anyway.
+
+The local batch checkpoints still get tidied before the PR, because the PR's
+commit list is what gets reviewed even though `main` will not keep it. Use
+`Refs #<n>` in any commit that is not the last.
 
 Then the PR, whose body is the template at `.github/pull_request_template.md`:
 

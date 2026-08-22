@@ -6,6 +6,13 @@
 #   codex-run.sh show   <target>
 #   codex-run.sh reset  <target>
 #
+# **All free-form prose goes through --extra-file / --notes-file, not argv** --
+# not merely long prose. One line is enough to contain a backtick, a `$` or a
+# `!`, and argv runs the text past the shell first: a real run lost part of its
+# instructions to `command not found: when`. Write it with a quoted heredoc,
+# which interpolates nothing, and pass the path. The inline forms remain for
+# short fixed labels with no punctuation.
+#
 # --role picks the model and the sandbox. --prompt picks the template, and
 # defaults to the role name: reviewing a plan rather than a diff is the same
 # model in the same sandbox reading a different brief, so it is
@@ -159,7 +166,7 @@ report() {
 # ---------------------------------------------------------------- arg parsing
 [ $# -ge 1 ] || usage
 ACTION="$1"; shift
-ROLE=""; NOTES=""; PROMPT_NAME=""
+ROLE=""; NOTES=""; PROMPT_NAME=""; NOTES_FILE=""; EXTRA_FILE=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --role)   ROLE="$2";  shift 2 ;;
@@ -168,6 +175,10 @@ while [ $# -gt 0 ]; do
         --prompt=*) PROMPT_NAME="${1#*=}"; shift ;;
         --notes)   NOTES="$2"; shift 2 ;;
         --notes=*) NOTES="${1#*=}"; shift ;;
+        --notes-file)   NOTES_FILE="$2"; shift 2 ;;
+        --notes-file=*) NOTES_FILE="${1#*=}"; shift ;;
+        --extra-file)   EXTRA_FILE="$2"; shift 2 ;;
+        --extra-file=*) EXTRA_FILE="${1#*=}"; shift ;;
         --) shift; break ;;
         -*) die "unknown flag: $1" ;;
         *) break ;;
@@ -176,6 +187,20 @@ done
 [ $# -ge 1 ] || usage
 TARGET="$1"; shift
 EXTRA="${*:-}"
+
+# Inline and file forms are mutually exclusive. Letting a file silently win
+# would mean a caller who passed both loses text without being told, and the
+# whole point of the file form is that prompt text arrives intact.
+if [ -n "$EXTRA_FILE" ]; then
+    [ -z "$EXTRA" ] || die "pass --extra-file or positional extra text, not both"
+    [ -f "$EXTRA_FILE" ] || die "--extra-file not found: $EXTRA_FILE"
+    EXTRA="$(cat "$EXTRA_FILE")"
+fi
+if [ -n "$NOTES_FILE" ]; then
+    [ -z "$NOTES" ] || die "pass --notes-file or --notes, not both"
+    [ -f "$NOTES_FILE" ] || die "--notes-file not found: $NOTES_FILE"
+    NOTES="$(cat "$NOTES_FILE")"
+fi
 
 case "$PROMPT_NAME" in
     */*|..*) die "--prompt takes a template name, not a path (got '$PROMPT_NAME')" ;;

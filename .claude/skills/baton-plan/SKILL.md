@@ -42,7 +42,19 @@ Then check what already exists:
 3. **Consider at least two shapes**, and write down why the loser lost. This is
    the single highest-value artifact of the phase: in six weeks the question
    will be "why is it like this", and the answer needs to exist somewhere.
-4. **Name what you are not doing** and why it is safe to defer.
+4. **Inventory the specification sites.** For any grammar, schema, registry
+   table, or contract vocabulary this touches: name **one canonical source**,
+   then every mirror and every generator of a mirror. Put that list in the
+   ticket's definition of done so the gate can check each site changed or is
+   explicitly unaffected.
+
+   This is the failure this project keeps hitting. The `when` grammar lived in
+   four places and they disagreed, which cost a Critical at gate; a fifth site
+   was a **generated** HTML page whose source was a Python generator, and a grep
+   did not find it. Enumerating by hand is cheaper than building a scanner, and
+   what it gives up is discovery of mirrors nobody knew about.
+
+5. **Name what you are not doing** and why it is safe to defer.
 
 Ask the user when a choice is theirs -- a product behaviour, a tradeoff between
 things they value differently, anything touching what the app *is*. Decide
@@ -67,7 +79,12 @@ Write or update the ticket. Four sections, all required:
    prevents. "None" is an acceptable answer, written explicitly.
 4. **Definition of done** -- checkboxes. Each one verifiable, each one something
    a person could disagree about. Copy the specific performance floor or
-   regression item by number. Always include clippy and test.
+   regression item by number. Always include clippy and test, and **list the
+   specification sites from phase 1 step 4** so the gate can check them.
+
+**Every checkbox here gets walked and ticked at the gate**, so write them as
+things someone can point at. "Correct" and "clean" are not gates; a named test
+or a command with an exit status is.
 
 Size it so it is one PR. If it is not, split it and say where the seam is:
 
@@ -87,7 +104,14 @@ read-only sandbox, against `CLAUDE.md` and the checklist.
 **Run it in the background** -- xhigh reviews routinely outlast a foreground
 command timeout:
 
-    .claude/skills/codex/codex-run.sh start --role review --prompt plan-review "#<n>"
+    cat > /tmp/plan.txt <<'BRIEF'
+    <what the reviewer should know that the ticket does not say>
+    BRIEF
+    .claude/skills/codex/codex-run.sh start --role review --prompt plan-review \
+        --extra-file /tmp/plan.txt "#<n>"
+
+All free-form prose goes through `--extra-file`, never argv: one line is enough
+to contain a backtick or a `!`, and a real run lost instructions that way.
 
 Read the trailing tag:
 
@@ -103,15 +127,25 @@ Read the trailing tag:
 Resume after revising, carrying what you changed:
 
     .claude/skills/codex/codex-run.sh resume --role review --prompt plan-review \
-        --notes "revised X because Y; kept Z because <reason>" "#<n>"
+        --notes-file /tmp/notes.txt "#<n>"
+
+**Three rounds is the ceiling**, as at the gate. After that, Minor and
+Suggestion findings may be closed by a `Ruling:` in the ledger, and a **standing
+Critical or Major may only be closed by a line in `DECISIONS.md`** with the
+reviewer told why in the next notes. A review that will not converge is being
+argued with rather than used -- but a reviewer that cannot be overruled blocks on
+its own misdiagnosis, which has already happened here once, so the escape hatch
+stays and is made public instead of private.
 
 Skip this phase only for a ticket that is a few mechanical lines. Anything
 touching an architecture contract goes through it.
 
 ## Done when
 
-The ticket exists, its four sections are filled, its labels and milestone are
-set, the plan review returned `APPROVED` or its findings were answered, and any
-decision it produced is a line in `DECISIONS.md`.
+The ticket exists, its four sections are filled, it lists the specification
+sites it touches, its labels and milestone are set, the plan review returned
+**`APPROVED`** -- with no standing Critical or Major, since this skill does not
+get to be more permissive than the checklist it points at -- and any decision it
+produced is a line in `DECISIONS.md`.
 
 Then: `baton-ticket #<n>`.

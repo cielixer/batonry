@@ -16,9 +16,10 @@ The unit of work is `{{TARGET}}`.
 ## Non-negotiable rules for this repository
 
 **Never edit these directories:** `crates/baton-winit`, `crates/baton-iced`,
-`crates/baton-iced-winit`. They are verbatim copies of upstream crates, kept
-byte-identical on purpose, and each carries an `UPSTREAM.diff` that stops
-making sense the moment they drift. `crates/baton-term` is also a copy but is
+`crates/baton-iced-winit`. They are **frozen** copies of upstream crates -- not
+identical to upstream, since `baton-winit` carries a deliberate macOS IME patch,
+but frozen -- and each carries an `UPSTREAM.diff` recording our divergence line
+by line, which stops making sense the moment they drift further. `crates/baton-term` is also a copy but is
 expected to diverge: changes there are allowed, must be marked with a
 `// BATON:` comment, and require `UPSTREAM.diff` to be regenerated (its header
 documents how). If you believe a change to any of the other three is
@@ -39,6 +40,27 @@ a test, say so in your report.
 
 **Do not commit, tag, bump versions, or touch the README.** The requester owns
 everything after implementation.
+
+## Standing conventions
+
+These were each corrected once already, so they are stated here rather than
+being taught again per ticket.
+
+- **No numeric `as` casts in new code.** Use `TryFrom`. A guarded `as` starts
+  truncating silently the moment someone loosens the guard, and arithmetic that
+  wrapped has already killed a background thread in this repository once.
+- **No API for a caller that does not exist yet.** No accessor nothing reads, no
+  trait impl nothing calls. Two of these crates are candidates for extraction
+  into their own repositories, where unused public surface becomes a
+  compatibility burden. Idiomatic derives are fine.
+- **`lib.rs` is module declarations and re-exports.** Nothing else lives there.
+  Split at a few hundred lines rather than growing one file.
+- **No field whose `false` case collapses into another variant.** If
+  `Thing { flag: false }` means exactly what `Other` means, the flag carries no
+  information and the variant is the wrong shape.
+- **Prefer the standard trait to a bespoke function** when the type will be
+  parsed, displayed or serialised: `FromStr` over `parse_thing`. The user's
+  configuration is TOML, so a deserializer has to be able to reach it.
 
 ## Scope
 

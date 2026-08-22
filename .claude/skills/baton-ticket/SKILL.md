@@ -39,24 +39,24 @@ consequence.
    actually read those files. If the four sections are missing or vague, stop and
    use `baton-plan` instead; implementing an unclear ticket produces work that
    fails review.
-3. Branch, always, no need to ask:
+3. Branch off **`main`**, always, no need to ask:
 
-       git switch -c m1/stage<N>-<slug>
+       git switch -c m1/stage<N>-<slug> main
 
-4. Open the ledger at
-   `.claude/skills/codex/state/ticket-<n>.ledger.md` -- gitignored, one per
-   ticket, and deliberately **not** keyed like the Codex threads: resetting a
-   thread rebuilds context, it does not erase what happened. If a ledger
-   already exists, read it; you may be resuming someone's afternoon.
+4. Open the ledger at `.claude/skills/codex/state/ticket-<n>.ledger.md` --
+   gitignored, one per ticket, and deliberately **not** keyed like the Codex
+   threads: resetting a thread rebuilds context, it does not erase what
+   happened. If a ledger already exists, read it; you may be resuming someone's
+   afternoon.
 
 ## Never touch
 
-`crates/baton-winit`, `crates/baton-iced`, `crates/baton-iced-winit` are
-verbatim copies of upstream. Their whole value is being byte-identical, and each
-has an `UPSTREAM.diff` that stops making sense the moment they drift. The
-implementer is told this too; **verify it in every batch review** with
-`git status -s`, because a plausible-looking edit there is the most expensive
-mistake available in this repository.
+`crates/baton-winit`, `crates/baton-iced` and `crates/baton-iced-winit` are
+**frozen** -- not byte-identical to upstream (`baton-winit` carries our IME
+patch) but frozen, with every line of our divergence recorded in each crate's
+`UPSTREAM.diff`, which stops making sense the moment they drift further. The
+implementer is told this too; **verify it in every batch review**, because a
+plausible-looking edit there is the most expensive mistake available here.
 
 `crates/baton-term` may change: mark each line `// BATON:` and regenerate
 `UPSTREAM.diff` (its header documents how) before the gate.
@@ -65,7 +65,15 @@ mistake available in this repository.
 
 ### 1. Decide the batches
 
-Read the ticket's checkboxes and split them.
+**Batches run one at a time, in one thread.** Both sources this workflow came
+from say so explicitly and for the same reason -- see `DECISIONS.md` #68 for the
+argument and the measurement. The short version: corrections from reviewing
+batch N are what batch N+1 needs, and they cannot exist before the review does.
+
+**Concurrency belongs across tickets**, in separate worktrees, decided before
+starting rather than mid-loop.
+
+Then split the ticket's checkboxes:
 
 - A batch is **the smallest set that leaves the tree green** -- compiles, clippy
   clean. Never split an interface from its implementation and its wiring.
@@ -79,22 +87,27 @@ Read the ticket's checkboxes and split them.
 
 ### 2. Delegate
 
-First batch:
+**Put the brief in a file.** All free-form prose goes through `--extra-file` and
+`--notes-file`, never argv -- one line is enough to contain a backtick, a `$` or
+a `!`, and argv hands the text to the shell first. A real run lost part of its
+instructions to `command not found: when`. A quoted heredoc interpolates nothing:
 
-    .claude/skills/codex/codex-run.sh start --role implement "#<n>" \
-        "Implement only: <checkbox text>"
+    cat > /tmp/batch1.txt <<'BRIEF'
+    Implement only: <checkbox text>
+    BRIEF
+    .claude/skills/codex/codex-run.sh start --role implement \
+        --extra-file /tmp/batch1.txt "#<n>"
 
 Each later batch resumes the same thread, carrying your corrections. Context
-compounds across turns -- this is why it is one thread and not one call per
+compounds across turns -- that is why it is one thread and not one call per
 batch:
 
     .claude/skills/codex/codex-run.sh resume --role implement \
-        --notes "<what you fixed after the last batch and why; conventions now binding>" \
-        "#<n>" "Now implement: <next checkboxes>"
+        --notes-file /tmp/notes1.txt --extra-file /tmp/batch2.txt "#<n>"
 
-**Run these in the background.** They routinely outlast a foreground timeout.
-Set `CODEX_TIMEOUT=1800` as a circuit breaker against a hung run -- generous, not
-a target.
+**Run these in the background** with `CODEX_TIMEOUT=1800` as a circuit breaker
+against a hung run -- generous, not a target. They routinely outlast a
+foreground timeout.
 
 Read the trailing tag: `IMPLEMENTATION_COMPLETE` means review the batch;
 `IMPLEMENTATION_PARTIAL` means read the report and either resume for the
@@ -102,23 +115,38 @@ remainder or finish the leftovers yourself during review.
 
 ### 3. Review the batch
 
-Before requesting the next one:
+In this order. The tests come **before** the micro-gate, because writing them
+changes the tree and a gate run from before that is evidence about code that no
+longer exists.
 
 1. **Review the delta only.** `git status -s && git diff` shows just this batch,
    because earlier batches are staged. Check it against the ticket, `CLAUDE.md`,
    and the patterns already in the code.
-2. **Confirm no copied crate was touched.** Non-negotiable, every batch.
+2. **Confirm no frozen crate was touched.** Non-negotiable, every batch.
 3. **Fix problems yourself.** Do not send fixes back -- a round trip costs more
-   than the edit. What you fixed and why becomes the next `--notes`.
-4. **Micro-gate:** `cargo clippy --workspace --all-targets -- -D warnings` and
-   `cargo build --workspace`. Fast checks only; the full suite waits for the
-   gate. Fix failures now.
-5. **Write the tests this batch needs.** They are yours. The user does not review
+   than the edit. What you fixed and why becomes the next batch's notes.
+4. **Write the tests this batch needs.** They are yours. The user does not read
    test code, so the standard is on you: a regression test is verified by
    reintroducing the bug and watching it fail. A test that passes both ways is
-   worse than no test, because it is believed.
-6. **Stage:** `git add -A`. No commits yet -- the next delta review needs a clean
-   worktree diff.
+   worse than none, because it is believed. The cross-model review checks test
+   *validity* at the gate -- vacuous assertions, dead branches, fixtures that
+   prove nothing -- but not until then, so do not lean on it here.
+5. **Micro-gate.** Each command as its own top-level command, reading its own
+   exit status. **No pipe, no `head`, no `||` fallback, and never `$?` after a
+   later command** -- that produced two false "clean" reports on the first
+   ticket through here, both hiding a failure in code written minutes earlier.
+
+       cargo fmt --all --check
+       cargo clippy --workspace --all-targets -- -D warnings
+       cargo build --workspace
+
+   The full suite waits for the gate. Fix failures now.
+6. **Stage the paths this ticket owns**, not everything:
+
+       git add -A -- crates/
+
+   `git add -A` picks up whatever else you touched. That is how a tooling fix
+   got entangled with the first ticket and cost a detour to separate.
 7. Verify the checkboxes the implementer ticked match what the diff contains.
 
 **Adapt.** Clean batch, grow the next. Heavy corrections, shrink it and spell out
@@ -126,24 +154,31 @@ the pattern in the notes. If the implementer keeps reintroducing something you
 corrected, reset the thread at the next batch boundary -- the ticket plus a
 summary note rebuilds context faster than arguing.
 
+**A tooling defect found mid-loop does not get fixed mid-loop.** Note it in the
+ledger and fix it after this ticket's PR is open, on its own branch. Interleaving
+the two costs more than the delay, and a squash merge would put two unrelated
+things in one commit.
+
 ### 4. Final pass
 
-After the last batch, read the **whole feature diff** once: `git diff HEAD`.
-Batch reviews catch local problems; this catches drift across batches --
-duplicated helpers, names that diverged, dead code left by a course correction.
-Fix directly.
+After the last batch, read the **whole feature diff** once:
+`git diff $(git merge-base main HEAD)`. Batch reviews catch local problems; this
+catches drift across batches -- duplicated helpers, names that diverged, dead
+code left by a course correction, a free function that should have been a
+standard trait impl. Fix directly.
 
 Then regenerate `crates/baton-term/UPSTREAM.diff` if that crate changed.
 
 ## Then the gate
 
-Do not open a PR from here. Run `baton-gate #<n>` -- the full test suite and a
-cross-model review of the whole branch.
+Do not open a PR from here. Run `baton-gate #<n>`, which walks the ticket's
+definition of done, runs the full suite and the repository-specific checks, and
+gets a cross-model review of the whole branch.
 
 ## Ledger
 
-Append as you go. It is the record of what happened and why, and the thing that
-lets a later session resume without re-deriving:
+Append as you go. It is the record of what happened and why, and what lets a
+later session resume without re-deriving:
 
     ## Batch 3 -- registry merge
     Implemented: id validation, duplicate detection
@@ -154,8 +189,12 @@ lets a later session resume without re-deriving:
       moves to a test in one commit.
     Tests: duplicate-id detection, verified by adding a duplicate
 
+**The ledger is gitignored and per-ticket, so anything durable in it has to be
+moved out before the ticket closes.** That is a step in `baton-gate`; write
+entries knowing they will be triaged rather than kept.
+
 ## Done when
 
-Every checkbox is implemented and verified against the diff, the copied crates
-are untouched, tests exist for new behaviour, clippy and build are green, the
-final pass is done, and the ledger has an entry per batch.
+Every checkbox is implemented and verified against the diff, the frozen crates
+are untouched, tests exist for new behaviour, fmt and clippy and build are green,
+the final pass is done, and the ledger has an entry per batch.

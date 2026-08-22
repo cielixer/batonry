@@ -1,137 +1,187 @@
 ---
 name: baton-gate
-description: Use before opening a batonry PR - runs the full test suite and the repository-specific checks, then a cross-model review of the whole branch, and opens the PR when both pass
+description: Use before opening a batonry PR - walks the ticket's definition of done, runs the full test suite and the repository-specific checks, then a cross-model review of the whole branch, and opens the PR when all three pass
 ---
 
 # Gate a batonry branch
 
-`baton-gate #<n>` -- or with no ticket, for work done by hand.
+`baton-gate #<n>` -- or with no ticket, for work done by hand. Work done by hand
+still goes through the gate.
 
-Two things, in this order, and the order matters: **the suite runs first.** A
-review of code that does not compile spends an expensive model's attention on
-findings the compiler would have given away.
+Three things, in this order, and the order matters. The ticket's own list comes
+first because it is the acceptance criteria; the suite next because a review of
+code that does not compile spends an expensive model's attention on findings the
+compiler would have given away.
 
-Callable on its own. Work done by hand still goes through the gate.
+## 0. Fix the comparison base
 
-## 1. The suite
+Everything below compares against the branch point, not against `HEAD`. `HEAD`
+misses committed work, and a branch with both committed and uncommitted changes
+would otherwise get a partial gate.
 
-All of it. Nothing here is optional, and a failure stops the gate.
+    BASE=$(git merge-base main HEAD)
+
+Also confirm nothing intended is untracked -- `git status --porcelain` should
+show no `??` for files the change needs. An untracked file is invisible to every
+check that follows.
+
+## 1. Walk the ticket's definition of done
+
+**`gh issue view <n>` and go through its checkboxes one at a time.** For each,
+say where it was verified: a test name, a command and its output, a file and
+line. Then tick it on the issue.
+
+This is the step the whole board design exists for. `Verify` is a separate column
+from `In progress` precisely so that "the code is written" and "the checkboxes
+were actually checked" cannot share a cell -- and the first ticket through this
+workflow reached its PR with **none** of its thirteen boxes ticked, because
+nothing walked them. The work had been done; nothing recorded it, so nothing
+would have caught it if it had not been.
+
+**A definition-of-done item you cannot point at is not done.** If one turns out
+to be unverifiable as written, that is a defect in the ticket: fix the wording,
+say so in the ledger, and do not tick it.
+
+With no ticket, say instead what the change was for and how you know it does it.
+
+## 2. The suite
+
+**Run each command unchanged, as its own top-level command, and read its own
+exit status.** Piping into `grep`, filtering, truncating with `head`, an `||`
+fallback, or reading `$?` after a later command **invalidates the result** --
+that is not pedantry, it produced two false "clean" reports on the first ticket
+through here, both times hiding a failure in freshly written code. Record the
+command and its status in the ledger.
 
     cargo fmt --all --check
     cargo clippy --workspace --all-targets -- -D warnings
-    cargo test --workspace
     cargo build --workspace
+    cargo test --workspace
 
-Then the checks that are specific to this repository, and that nothing else
-enforces -- there is no CI yet, so this skill *is* the enforcement:
+A failure stops the gate. Then the checks specific to this repository, which
+nothing else enforces -- there is no CI yet, so this skill *is* the enforcement.
 
-**Copied crates are still byte-identical to upstream.** The three verbatim
-copies exist to be verbatim; a diff there is a defect even if it compiles.
+**The copied crates are frozen.** `baton-winit`, `baton-iced` and
+`baton-iced-winit` are not byte-identical to upstream -- `baton-winit` carries
+our IME patch -- they are **frozen relative to the branch base**, with every
+line of our divergence recorded in each crate's `UPSTREAM.diff`. So the check is
+that this branch adds no new divergence:
 
-    for c in baton-winit baton-iced baton-iced-winit; do
-      echo "== $c: $(grep -c '^+' crates/$c/UPSTREAM.diff) added lines on record"
-    done
-    git diff --stat HEAD -- crates/baton-winit crates/baton-iced crates/baton-iced-winit
+    git diff --quiet "$BASE" -- crates/baton-winit crates/baton-iced crates/baton-iced-winit
 
-If that last command prints anything, stop. Either the change is wrong, or it is
-deliberate and `UPSTREAM.diff` plus `NOTICE.md` need updating in the same commit.
+Non-zero means stop. Either the change is wrong, or it is deliberate and
+`UPSTREAM.diff` plus `NOTICE.md` are updated in the same commit.
 
-**`crates/baton-term`'s diff is current.** It is the copy that may diverge, so
-its record has to keep up. Regenerate per the header of
-`crates/baton-term/UPSTREAM.diff` and confirm no unexplained delta.
+**`crates/baton-term` may diverge, so its record has to keep up.** If
+`git diff --quiet "$BASE" -- crates/baton-term` fails, regenerate
+`UPSTREAM.diff` per its header and confirm no unexplained delta.
 
-**Everything git tracks is English.** The exceptions are fixtures whose subject
-*is* the text, and the list is exact:
+**Everything git tracks is English**, except fixtures whose subject *is* the
+text. The allowlist lives in `CLAUDE.md` section 7c and **is not restated here**
+-- one number in two places is how it drifts, and it already moved twice in a
+day. Compare, and treat a difference in **either** direction as a failure: an
+extra file is an English-only violation, a missing one means the allowlist is
+now over-permissive and gets narrowed in this commit.
 
     git ls-files | xargs grep -l '[가-힣]'
 
-Nine files are legitimate: four `baton-term` test fixtures, four `baton-winit`
-files carrying upstream text and IME evidence, and **this file** -- a check for
-those characters necessarily contains them, which is the same data exception the
-fixtures rely on. **A tenth is a failure**, and so is a list of eight: if a file
-dropped off, the allowlist in `CLAUDE.md` section 7c is now over-permissive and
-gets narrowed in this commit.
+**Every mirrored specification the ticket named was updated.** The ticket's
+definition of done lists the canonical source and each mirror and generator for
+any grammar, schema or vocabulary it touches (see `baton-plan`). Check each one
+either changed or is explicitly unaffected. Generated files are rebuilt from
+their generator, never hand-edited.
 
-**Test flakiness is a failure, not a retry.** Run `cargo test --workspace` more
-than once. A test that passes on the second attempt is a defect report: this
-repository has already had a gauge underflow surface as an assertion failure in
-an unrelated test, and re-running would have hidden it. Find the cause.
+**Test flakiness is a failure, not a retry.** Run `cargo test --workspace`
+**three consecutive times** and require three passes. A test that passes on a
+later attempt is a defect report: this repository has already had a gauge
+underflow surface as an assertion failure in an unrelated test, and re-running
+would have buried it.
 
-## 2. Cross-model review
+## 3. Cross-model review
 
 `gpt-5.6-sol` at xhigh, read-only, against `CLAUDE.md` and
-`.claude/skills/codex/review-checklist.md`. **Run it in the background** and set
-`CODEX_TIMEOUT=1800` as a circuit breaker.
+`.claude/skills/codex/review-checklist.md`. **Run it in the background** with
+`CODEX_TIMEOUT=1800` as a circuit breaker, and put the brief in a file -- all
+free-form prose goes through `--extra-file`, never argv.
 
-    .claude/skills/codex/codex-run.sh start --role review "#<n>" \
-        "Suite: fmt/clippy/test/build all green. <anything it should know>"
+    cat > /tmp/gate.txt <<'BRIEF'
+    Suite: fmt/clippy/build/test all green, three consecutive test runs.
+    <the definition-of-done walk, and anything it should know>
+    BRIEF
+    .claude/skills/codex/codex-run.sh start --role review --extra-file /tmp/gate.txt "#<n>"
 
-Pass the suite result in the extra context. The reviewer is told not to hunt for
-coverage gaps, and knowing the suite passed keeps it from guessing.
+Tell it the suite passed. The reviewer is told not to hunt for coverage gaps,
+and knowing the suite is green keeps it from guessing.
 
 ### The loop
 
-- `APPROVED` -- go to step 3.
+- `APPROVED` -- go to step 4.
 - `REQUEST_CHANGES` -- **engage critically.** Open every `file:line` it cites
   before agreeing. A different model is valuable because it does not share the
   implementation's blind spots; the same property means it does not share its
-  context either, so some findings are it missing something. Fix the real ones.
-  Push back on the wrong ones with the argument, once. Then resume:
+  context, so some findings are it missing something. Fix the real ones. Push
+  back on the wrong ones with the argument, once. Then resume with
+  `--notes-file`.
+- `NEEDS_REWORK` -- structural. Surface it before mass-editing; this is one of
+  the four things that stops a run.
 
-      .claude/skills/codex/codex-run.sh resume --role review \
-          --notes "fixed A and B at <file:line>; C is intentional because <reason>" \
-          "#<n>"
+**A standing Critical or Major does not pass.** The checklist says approval
+requires zero of each, and this skill does not get to be more permissive than
+the checklist it points at. Three rounds is the ceiling; after that:
 
-- `NEEDS_REWORK` -- structural. Surface it to the user before mass-editing;
-  this is one of the four things that stops a run.
+- **Minor and Suggestion** findings may be closed by a `Ruling:` in the ledger.
+- **Critical and Major** may only be closed by a line in `DECISIONS.md`, and
+  the reviewer is told in the next `--notes-file` that they were closed and why.
 
-**Three rounds, then adjudicate.** If findings still stand after three, decide
-each one yourself: fix it, or record why it stands, in the ledger with a
-`Ruling:` line. A review loop that never converges is a review loop being
-argued with rather than used.
+That is deliberately harder than a ledger note and deliberately not "the
+reviewer has the last word". On the first ticket through here the one Critical
+was real *and* its proposed fix was in the wrong direction -- the inconsistency
+existed in four places and the reviewer wanted the three correct ones changed.
+A reviewer that cannot be overruled blocks on its own misdiagnosis; an operator
+who can wave a Critical away in a per-ticket, gitignored ledger is not being
+held to anything. A decision entry is the middle: public, permanent, and
+answerable later.
 
-## 3. Commit and open the PR
+## 4. Promote what the ledger learned
 
-**The branch is squash-merged, so exactly one commit reaches `main` per ticket**
-and it is the only text anyone reads in `git log`. Squash merging is the only
-button the repository offers; merge commits and rebase merges are disabled.
+**Before opening the PR, empty the ledger of anything durable.** It is
+per-ticket and gitignored, so whatever stays in it dies with the ticket. Each
+lesson has exactly one of three homes:
 
-Two consequences worth holding onto:
+| kind | goes to |
+|---|---|
+| A convention the implementer should have known | `codex/prompts/implement.tpl` |
+| A gap in how this workflow runs | the relevant `SKILL.md` |
+| A choice someone will question later | `DECISIONS.md` |
 
-- **The body does not write itself.** The repository is configured to leave a
-  squash commit's body **blank** rather than pasting the PR template or a bullet
-  list of the batch checkpoints, both of which are noise in `git log`. So the
-  message is written deliberately, in the voice the existing history uses:
-  prose, several paragraphs, what changed for a person using the app and what
-  the alternative was. The title carries the milestone and stage, which is what
-  makes a `git log --oneline` spanning two milestones readable:
+The first ticket through here produced four durable lessons and three of them
+survived only because someone asked for a retrospective afterwards. This step is
+that retrospective, made routine and small.
 
-      m1/stage1: action registry with stable ids and a named-source merge
+## 5. Commit and open the PR
 
-  GitHub appends ` (#<pr>)`. Do not use Conventional Commits — nothing here
-  consumes them, and the existing history is prose.
+Tidy the branch into **one intentional commit**. The repository squash-merges
+with `squash_merge_commit_message=COMMIT_MESSAGES`, so that commit's subject and
+body *become* the squash message -- which makes "tidy the commits" load-bearing
+rather than housekeeping, because several commits concatenate. Verify the text
+as what will live in `git log`: prose, what changed for a person using the app,
+and what the alternative was.
 
-- **Branch every ticket off `main`, never off another ticket's branch.** A
-  squash merge means the branch's own commits never become ancestors of `main`,
-  so a branch stacked on a squash-merged branch carries content that now exists
-  twice and rebases badly. Stage 1 has dependent tickets (#11 needs #10, #15
-  needs #10, #11 and #14) — wait for the dependency to merge. At half a day to
-  three days per ticket, with one person, serial is the normal case anyway.
+Subject carries the milestone and stage; GitHub appends the PR number.
 
-The local batch checkpoints still get tidied before the PR, because the PR's
-commit list is what gets reviewed even though `main` will not keep it. Use
-`Refs #<n>` in any commit that is not the last.
+    m1/stage1: action registry and the default keymap
 
-Then the PR, whose body is the template at `.github/pull_request_template.md`:
-
-    gh pr create --fill --body-file <(...)   # keep the template's structure
-
+Then the PR, keeping the structure of `.github/pull_request_template.md`, with
 `Closes #<n>` in the body. **Only tick a checkbox you actually verified** --
-that is the whole reason the list exists. Attach the measurement if the ticket
-was on a performance floor; numbers, not adjectives.
+that is the whole reason the list exists. Attach numbers, not adjectives, if the
+ticket was on a performance floor.
+
+Branch policy lives in `docs/WORKFLOW.md`; it is settled at ticket setup and not
+re-argued here.
 
 ## Done when
 
-The suite is green including the repository-specific checks, the review returned
-`APPROVED` or every finding has a fix or a recorded ruling, and the PR is open
-with `Closes #<n>` and an honestly-ticked checklist.
+The ticket's definition of done is walked and ticked, the suite is green
+including the repository-specific checks, the review returned `APPROVED` with no
+standing Critical or Major, the ledger has been emptied of anything durable, and
+the PR is open with `Closes #<n>` and an honestly-ticked checklist.

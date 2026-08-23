@@ -18,8 +18,8 @@ pattern.
 {{EXTRA}}
 
 Same rules as the first turn, and they still bind: stay inside the stated
-scope; never touch `crates/baton-winit`, `crates/baton-iced`, or
-`crates/baton-iced-winit`; mark any `crates/baton-term` change with `// BATON:`;
+scope; never touch `crates/winit`; mark any `crates/baton-term` change with
+`// BATON:`;
 everything git tracks is English; no tests; no commits, tags, versions, or
 README edits; leave clippy and build green.
 

@@ -8,7 +8,7 @@
 //!
 //! winit 0.30.13 as published answers `{NSNotFound, 0}` and `None`, so the
 //! input method cannot use that model and the first jamo never joins the
-//! composition: typing "한글" produces "ㅎㅏㄴ글". `crates/baton-winit` fixes it by
+//! composition: typing "한글" produces "ㅎㅏㄴ글". `crates/winit` fixes it by
 //! exposing only the in-flight composition as the document and absorbing the
 //! replacement, so the app sees nothing but ordinary `Preedit` / `Commit`.
 //!
@@ -120,32 +120,46 @@ fn recording_from_before_the_fix_shows_the_broken_composition() {
 /// and Korean input silently breaks again.
 #[test]
 fn winit_ime_fix_is_wired_up() {
+    // The chain is `iced -> iced_winit -> winit`, all three published, with
+    // only the last one substituted. `[patch.crates-io]` **cannot rename** a
+    // package -- which is what made this look like it needed three hardcopies --
+    // but it can replace one, so a copy that keeps the name `winit` collapses
+    // the chain to a single override.
+    //
+    // **This is the assertion that matters.** Of the ways to break the
+    // substitution, only one is silent: deleting the section. Cargo hard-errors
+    // on the other two (renaming the copy, or a `package = "..."` key here), so
+    // they need no guard.
     let manifest = std::fs::read_to_string("../../Cargo.toml")
         .expect("workspace manifest");
+    // Split on the *line-anchored* header, not the bare string: prose in this
+    // manifest mentions the section by name, and matching that instead sent an
+    // earlier version of this assertion looking in the wrong half of the file.
+    let patched = manifest
+        .split("\n[patch.crates-io]")
+        .nth(1)
+        .is_some_and(|t| t.contains("winit = { path = \"crates/winit\" }"));
     assert!(
-        manifest.contains("path = \"crates/baton-iced\"")
-            && manifest.contains("package = \"baton-iced\""),
-        "the workspace no longer depends on crates/baton-iced, so the published \
-         iced -> iced_winit -> winit chain is in use and the first Hangul jamo \
-         is dropped again"
+        patched,
+        "the workspace no longer patches winit to crates/winit, so the \
+         published winit is in use and the first Hangul jamo is dropped again"
     );
-    for (crate_dir, dep, pkg) in [
-        ("baton-iced", "iced_winit", "baton-iced-winit"),
-        ("baton-iced-winit", "winit", "baton-winit"),
-    ] {
-        let m = std::fs::read_to_string(format!("../{crate_dir}/Cargo.toml"))
-            .unwrap_or_else(|_| panic!("crates/{crate_dir}/Cargo.toml"));
-        assert!(
-            m.contains(&format!("package = \"{pkg}\"")),
-            "crates/{crate_dir} no longer redirects its `{dep}` dependency to \
-             {pkg}; the chain falls back to crates.io"
-        );
-    }
 
-    let view = std::fs::read_to_string(
-        "../baton-winit/src/platform_impl/macos/view.rs",
-    )
-    .expect("vendored winit view.rs");
+    // Cargo would refuse to build a renamed copy on its own -- measured: the
+    // patch "failed to resolve" rather than being ignored. This assertion is
+    // not catching a silent failure, then; it turns that error into one that
+    // says *why* the name is load-bearing, which is worth two lines.
+    let vendored = std::fs::read_to_string("../winit/Cargo.toml")
+        .expect("crates/winit/Cargo.toml");
+    assert!(
+        vendored.contains("name = \"winit\""),
+        "crates/winit is no longer named `winit`, and [patch] cannot rename a \
+         package -- so the substitution cannot resolve at all"
+    );
+
+    let view =
+        std::fs::read_to_string("../winit/src/platform_impl/macos/view.rs")
+            .expect("vendored winit view.rs");
     for needle in [
         // absorbs insert-then-replace
         "fn handle_composing_insert",
@@ -157,7 +171,7 @@ fn winit_ime_fix_is_wired_up() {
     ] {
         assert!(
             view.contains(needle),
-            "{needle:?} is gone from crates/baton-winit -- the IME fix was reverted"
+            "{needle:?} is gone from crates/winit -- the IME fix was reverted"
         );
     }
     // And the shape the upstream issue points at must not come back.

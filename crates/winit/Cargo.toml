@@ -13,8 +13,8 @@
 edition = "2021"
 rust-version = "1.70.0"
 # Renamed from `winit`. Dependents refer to it as `winit` through a renamed
-# dependency (`package = "baton-winit"`), so their source is untouched.
-name = "baton-winit"
+# `[patch.crates-io]` substitution, so their source is untouched.
+name = "winit"
 version = "0.30.13"
 authors = [
     "The winit contributors",

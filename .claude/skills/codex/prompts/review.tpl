@@ -56,12 +56,11 @@ work at once, and `HEAD` shows you only half of it.
   where the test would plainly still pass. Say so when you see it.
 - Style or formatting. `cargo fmt` and clippy already decide this, and both ran
   before you were called.
-- Anything in `crates/baton-winit`, `crates/baton-iced` or
-  `crates/baton-iced-winit` that this branch did not change. Those are **frozen**
-  copies -- not identical to upstream, since `baton-winit` carries a deliberate
-  IME patch recorded in its `UPSTREAM.diff`, but frozen. Upstream's choices are
-  not this change's problem. Do flag any change this branch makes there, because
-  there should be none.
+- Anything in `crates/winit` that this branch did not change. It is a **frozen**
+  copy -- not identical to upstream, since it carries a deliberate IME patch
+  recorded in its `UPSTREAM.diff`, but frozen. Upstream's choices are not this
+  change's problem. Do flag any change this branch makes there, because there
+  should be none.
 - Theoretical edge cases that real input does not produce.
 - A finding the implementer already addressed or pushed back on with a reason.
 

@@ -62,13 +62,13 @@ cargo build --workspace
 cargo test  --workspace
 ```
 
-Three crates under `crates/` are copies of upstream libraries rather than
-dependencies, because Cargo cannot rename a patched package. Each carries a
-`NOTICE.md` explaining why it is there and an `UPSTREAM.diff` recording our
-divergence line by line — two are unmodified apart from one dependency line, and
-`baton-winit` holds the macOS input fix. They are excluded from the workspace and
-must not be reformatted: the diffs are only readable while the surrounding code
-stays put.
+`crates/winit` is a copy of upstream rather than a dependency, because the macOS
+Korean input fix has to live inside the `NSView` that receives the input
+method's callbacks. It reaches the build through one `[patch.crates-io]`
+substitution; `iced` comes from crates.io like anything else. `NOTICE.md`
+explains why, and `UPSTREAM.diff` records our divergence line by line — 207
+lines in a single file. It is excluded from the workspace and must not be
+reformatted: the diff is only readable while the surrounding code stays put.
 
 ## Contributing
 

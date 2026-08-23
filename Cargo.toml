@@ -1,7 +1,8 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
-exclude = ["crates/baton-winit", "crates/baton-iced-winit", "crates/baton-iced"]
+# One copied crate. It is substituted at the bottom of this file.
+exclude = ["crates/winit"]
 
 [workspace.package]
 edition = "2024"
@@ -11,8 +12,9 @@ repository = "https://github.com/cielixer/batonry"
 rust-version = "1.93"
 
 [workspace.dependencies]
-# UI. Declarative (Elm), wgpu backend.
-iced = { path = "crates/baton-iced", package = "baton-iced", features = [
+# UI. Declarative (Elm), wgpu backend. Published, like any other dependency:
+# only `winit` underneath it is substituted, at the bottom of this file.
+iced = { version = "0.14.0", features = [
     "canvas",
     "lazy",
     "advanced",
@@ -44,3 +46,20 @@ debug = 1 # keep symbols: we profile release builds
 
 [profile.bench]
 debug = 1
+
+# The macOS Korean input fix lives in a copy of winit, because the code it
+# patches is the NSView that implements NSTextInputClient and macOS delivers IME
+# callbacks there -- no crate without a window can hold it.
+#
+# **The copy keeps the name `winit` on purpose:** `[patch]` replaces a package
+# but cannot rename one.
+#
+# Measured on cargo 1.93, because only one of the ways to get this wrong is
+# dangerous. Renaming the copy, or writing `package = "..."` in the patch
+# below, both make cargo refuse outright ("patch for `winit` failed to
+# resolve"). **Deleting this section is completely silent** -- no error, no
+# warning, and `winit` quietly resolves to crates.io, which builds and drops the
+# first Hangul jamo. That is the one `crates/baton-term/tests/ime.rs` exists to
+# catch.
+[patch.crates-io]
+winit = { path = "crates/winit" }

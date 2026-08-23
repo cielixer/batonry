@@ -1,5 +1,5 @@
 --- winit-0.30.13/src/platform_impl/macos/view.rs
-+++ crates/baton-winit/src/platform_impl/macos/view.rs
++++ crates/winit/src/platform_impl/macos/view.rs
 @@ -122,6 +122,34 @@
      ime_state: Cell<ImeState>,
      input_source: RefCell<String>,

@@ -47,9 +47,8 @@ is confident, ask what it is assuming.
 - Naming, formatting, or file layout preferences.
 - Missing tests. The requester owns the test suite.
 - Anything the ticket explicitly defers with a reason.
-- Work in the copied crates (`crates/baton-winit`, `crates/baton-iced`,
-  `crates/baton-iced-winit`) -- planning a change there is itself the finding,
-  and those crates are otherwise out of scope.
+- Work in the copied crate (`crates/winit`) -- planning a change there is itself
+  the finding, and it is otherwise out of scope.
 
 ## Output
 

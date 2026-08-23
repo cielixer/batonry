@@ -10,7 +10,7 @@ they share.
     codex/        one script, four prompt roles, a review checklist
 
 They are **specific to this repository** on purpose. They know that `CLAUDE.md`
-is the contract, that three crates are frozen copies that must not be edited,
+is the contract, that `crates/winit` is a frozen copy that must not be edited,
 that everything git tracks is English, and that the person running them does not
 review test code. A general-purpose workflow cannot know any of that, and those
 are the facts that actually prevent mistakes here.

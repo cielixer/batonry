@@ -41,6 +41,12 @@ tokio = { version = "1", features = [
 open = "5.3"
 unicode-width = "0.2"
 
+# W3C UI Events key vocabulary. Not a windowing library -- enums and a bitflags
+# struct -- so `baton-action` can depend on it without learning what a window
+# is. Physical `Code` is the one that matters: it is stable across keyboard
+# layouts, and the logical key is not (measured).
+keyboard-types = { version = "0.8", default-features = false }
+
 [profile.release]
 debug = 1 # keep symbols: we profile release builds
 

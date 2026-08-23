@@ -51,7 +51,7 @@ Not "later" — these are structural.
 | No agent forwarding by default | Anyone with root on the remote could impersonate you. Jump hosts instead |
 | No sync, team vaults, session recording, or SSO | All of it needs a server. Share configuration as text files in git |
 | No mobile client | The SSH key would have to live on the phone |
-| No Windows | Connection reuse is Unix-only by construction |
+| macOS first, and Windows not yet | Connection reuse is Unix-only by construction, and so is much of the terminal work. Where being platform-neutral costs nothing — key codes, modifier names — the code already is |
 
 ## Building
 

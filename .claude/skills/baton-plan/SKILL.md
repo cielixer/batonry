@@ -54,7 +54,14 @@ Then check what already exists:
    did not find it. Enumerating by hand is cheaper than building a scanner, and
    what it gives up is discovery of mirrors nobody knew about.
 
-5. **Name what you are not doing** and why it is safe to defer.
+5. **Name the new words.** Any term this introduces that a reader would have to
+   ask about -- a public type, a concept, a piece of project vocabulary -- gets
+   listed here and lands in the ticket's definition of done, so the gate can
+   check each one is defined in the owning crate's `//!` docs. The first ticket
+   through this workflow shipped seven new public types and defined none, and it
+   surfaced as a reviewer saying the words were unfamiliar.
+
+6. **Name what you are not doing** and why it is safe to defer.
 
 Ask the user when a choice is theirs -- a product behaviour, a tradeoff between
 things they value differently, anything touching what the app *is*. Decide
@@ -72,15 +79,16 @@ Write or update the ticket. Four sections, all required:
 
 1. **What** -- one paragraph. What is visible when this is done.
 2. **Read first** -- three to five pointers. More than five means the ticket is
-   too big. Put the *substance* inline, not just links: `docs/` is not tracked
-   by git, so a ticket that only links to it cannot be read by anyone else or by
-   a fresh session.
+   too big. **Put the substance inline, not just links.** The planning notes are
+   not in the repository, so a ticket that only points at them cannot be read by
+   anyone else, or by a fresh session, or by the reviewer.
 3. **Architecture contract** -- which of A1-A11 this is on, and the failure each
    prevents. "None" is an acceptable answer, written explicitly.
 4. **Definition of done** -- checkboxes. Each one verifiable, each one something
    a person could disagree about. Copy the specific performance floor or
-   regression item by number. Always include clippy and test, and **list the
-   specification sites from phase 1 step 4** so the gate can check them.
+   regression item by number. Always include clippy and test, **list the
+   specification sites from phase 1 step 4**, and **list the new words from step
+   5**, so the gate can check both.
 
 **Every checkbox here gets walked and ticked at the gate**, so write them as
 things someone can point at. "Correct" and "clean" are not gates; a named test

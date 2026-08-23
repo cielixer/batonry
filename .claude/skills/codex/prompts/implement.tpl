@@ -61,6 +61,10 @@ being taught again per ticket.
 - **Prefer the standard trait to a bespoke function** when the type will be
   parsed, displayed or serialised: `FromStr` over `parse_thing`. The user's
   configuration is TOML, so a deserializer has to be able to reach it.
+- **Every public type gets a doc comment saying what it is for**, not what it
+  is. Most of the vocabulary here is this project's rather than Rust's, so a
+  reader arrives without it. Say why the type exists and what breaks without
+  it; the signature already says the rest.
 
 ## Scope
 

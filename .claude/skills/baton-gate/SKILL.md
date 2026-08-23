@@ -85,6 +85,25 @@ now over-permissive and gets narrowed in this commit.
 
     git ls-files | xargs grep -l '[가-힣]'
 
+**Every new word is defined in the crate's `//!` docs.** Most of the vocabulary
+here is this project's rather than Rust's or `iced`'s -- action, binding, chord,
+issue site, `when` clause -- so a reader arrives without it. #10 introduced seven
+public types and defined none of them, and it surfaced as a reviewer saying the
+words were unfamiliar, which is the expensive way to find out.
+
+So: for each public type or piece of project vocabulary this branch introduces,
+check the crate's `//!` block defines it, in English, with a link to the type
+where the detail lives. Run
+`RUSTDOCFLAGS="-D rustdoc::broken_intra_doc_links" cargo doc --no-deps` -- a
+vocabulary list with dead links is worse than none.
+
+**There is exactly one home for this, and it is the `//!` block.** It sits next
+to the code, so it cannot drift from what it describes; `cargo doc` renders it;
+and it is all anyone gets from a clone. A per-crate `README.md` would restate the
+type docs with nothing keeping the two honest, and a second copy anywhere else is
+an obligation that gets skipped -- which is how this gap appeared. A README earns
+its place only when a crate is extracted and has an audience on crates.io.
+
 **Every mirrored specification the ticket named was updated.** The ticket's
 definition of done lists the canonical source and each mirror and generator for
 any grammar, schema or vocabulary it touches (see `baton-plan`). Check each one
@@ -176,12 +195,12 @@ Then the PR, keeping the structure of `.github/pull_request_template.md`, with
 that is the whole reason the list exists. Attach numbers, not adjectives, if the
 ticket was on a performance floor.
 
-Branch policy lives in `docs/WORKFLOW.md`; it is settled at ticket setup and not
-re-argued here.
+Branch policy is settled at ticket setup and not re-argued here.
 
 ## Done when
 
 The ticket's definition of done is walked and ticked, the suite is green
-including the repository-specific checks, the review returned `APPROVED` with no
-standing Critical or Major, the ledger has been emptied of anything durable, and
-the PR is open with `Closes #<n>` and an honestly-ticked checklist.
+including the repository-specific checks, every new term is defined in the
+crate's `//!` docs, the review returned `APPROVED`
+with no standing Critical or Major, the ledger has been emptied of anything
+durable, and the PR is open with `Closes #<n>` and an honestly-ticked checklist.

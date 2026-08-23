@@ -1,6 +1,0 @@
-# Upstream source, kept verbatim so UPSTREAM.diff stays meaningful.
-#
-# rustfmt resolves its config by walking up from each file, so this stops
-# `cargo fmt --all` from reformatting a hardcopy. The root rustfmt.toml cannot
-# express this: its `ignore` key is nightly-only.
-disable_all_formatting = true

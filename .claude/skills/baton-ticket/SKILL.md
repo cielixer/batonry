@@ -51,10 +51,9 @@ consequence.
 
 ## Never touch
 
-`crates/baton-winit`, `crates/baton-iced` and `crates/baton-iced-winit` are
-**frozen** -- not byte-identical to upstream (`baton-winit` carries our IME
-patch) but frozen, with every line of our divergence recorded in each crate's
-`UPSTREAM.diff`, which stops making sense the moment they drift further. The
+`crates/winit` is **frozen** -- not byte-identical to upstream, since it carries
+our macOS IME patch, but frozen, with every line of our divergence recorded in
+its `UPSTREAM.diff`, which stops making sense the moment it drifts further. The
 implementer is told this too; **verify it in every batch review**, because a
 plausible-looking edit there is the most expensive mistake available here.
 

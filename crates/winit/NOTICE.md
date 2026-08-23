@@ -1,16 +1,33 @@
-# `crates/baton-winit` -- why this is here
+# `crates/winit` -- why this is here
 
 A copy of `winit` 0.30.13 (Apache-2.0) with macOS Korean input fixed.
 
-It reaches our crates through two thin hardcopies rather than
-`[patch.crates-io]`:
+The macOS input method delivers its callbacks to the `NSView` that implements
+`NSTextInputClient`, and winit owns that view. So the fix has to live inside
+winit: no crate without a window can hold it, and it cannot be done from the
+application either, because the information never reaches the application --
+upstream answers `attributedSubstringForProposedRange:` with `nil`.
 
-    our crates -> baton-iced -> baton-iced-winit -> baton-winit
+It reaches our crates through **one substitution**:
 
-Each arrow is a renamed path dependency, so every crate we maintain carries our
-own name and the source of all three is verbatim upstream. Builds stay hermetic
-(no git dependencies). Why not `[patch]`: see
-[`../baton-iced-winit/NOTICE.md`](../baton-iced-winit/NOTICE.md).
+    [patch.crates-io]
+    winit = { path = "crates/winit" }
+
+`iced` and `iced_winit` come from crates.io like any other dependency.
+
+**The package keeps the name `winit`, and that is why one copy is enough.**
+`[patch]` can replace a package but cannot rename one. Reading that as "patch
+does not work here" is what produced three hardcopies of `winit`, `iced_winit`
+and `iced`, so that `[dependencies]`, which *can* rename, could redirect the
+whole chain. The two upper copies existed for a naming preference and their
+entire delta was one dependency line each; they are gone, and 6,408 lines with
+them.
+
+Measured, because only one way of breaking this is dangerous. Renaming this
+package, or adding `package = "..."` to the patch, both make cargo refuse
+outright. **Deleting the patch section is silent** -- no error, no warning, and
+`winit` resolves to crates.io, which compiles and drops the first Hangul jamo.
+`crates/baton-term/tests/ime.rs` asserts the substitution for that reason.
 
 - Upstream: crates.io `winit 0.30.13`
 - Licence: Apache-2.0 (upstream `LICENSE` preserved verbatim)
@@ -32,11 +49,7 @@ to be re-vendored (and re-diffed against a newer upstream) then. The 57k lines
 are almost entirely code we never compile on macOS, so they cost disk and
 nothing else.
 
-## Two things that look wrong and are not
-
-**The package is named `baton-winit`, not `winit`.** Dependents refer to it as
-`winit` through a renamed dependency, so upstream's `use winit::...` keeps
-working and nothing in `src/` had to change for the rename.
+## One thing that looks wrong and is not
 
 **It is excluded from the workspace** (`exclude` in the root `Cargo.toml`).
 Otherwise `cargo fmt`, `cargo clippy -D warnings` and `cargo test --workspace`

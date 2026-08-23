@@ -76,9 +76,8 @@ Also structural, from sections 2 and 7c:
 ## 5. Fit
 
 - Does the change do what the ticket's "Definition of done" says, and only that?
-- Are the copied crates untouched (`baton-winit`, `baton-iced`,
-  `baton-iced-winit`), and is any `crates/baton-term` change marked `// BATON:`
-  with `UPSTREAM.diff` regenerated?
+- Is `crates/winit` untouched, and is any `crates/baton-term` change marked
+  `// BATON:` with `UPSTREAM.diff` regenerated?
 - Are colours and user-visible strings in one place rather than scattered?
 - Does a new module or crate exist because a rule needs enforcing at that
   boundary, or only because it felt tidy? A folder is enough when there is no
@@ -101,8 +100,7 @@ Grade these like any other finding.
 `cargo clippy --workspace --all-targets -- -D warnings` ran and passed before
 this review started.
 
-**Upstream code.** The three copied crates are **frozen**, not identical to
-upstream -- `baton-winit` carries a deliberate IME patch, recorded line by line
-in its `UPSTREAM.diff`. Code there that this branch did not touch is not this
-change's problem. A change this branch *makes* there is, because there should be
-none.
+**Upstream code.** `crates/winit` is **frozen**, not identical to upstream -- it
+carries a deliberate IME patch, recorded line by line in its `UPSTREAM.diff`.
+Code there that this branch did not touch is not this change's problem. A change
+this branch *makes* there is, because there should be none.

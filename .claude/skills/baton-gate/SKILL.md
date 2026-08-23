@@ -61,16 +61,21 @@ command and its status in the ledger.
 A failure stops the gate. Then the checks specific to this repository, which
 nothing else enforces -- there is no CI yet, so this skill *is* the enforcement.
 
-**The copied crates are frozen.** `baton-winit`, `baton-iced` and
-`baton-iced-winit` are not byte-identical to upstream -- `baton-winit` carries
-our IME patch -- they are **frozen relative to the branch base**, with every
-line of our divergence recorded in each crate's `UPSTREAM.diff`. So the check is
-that this branch adds no new divergence:
+**The copied crate is frozen.** `crates/winit` is not byte-identical to
+upstream -- it carries our IME patch -- it is **frozen relative to the branch
+base**, with every line of our divergence recorded in its `UPSTREAM.diff`. So
+the check is that this branch adds no new divergence:
 
-    git diff --quiet "$BASE" -- crates/baton-winit crates/baton-iced crates/baton-iced-winit
+    git diff --quiet "$BASE" -- crates/winit
 
 Non-zero means stop. Either the change is wrong, or it is deliberate and
 `UPSTREAM.diff` plus `NOTICE.md` are updated in the same commit.
+
+**And the substitution is still in place.** `[patch.crates-io]` is the whole
+reason one copy is enough, and **deleting it is silent** -- cargo emits no error
+and no warning, resolves the published crate, and the first Hangul jamo starts
+being dropped again. `crates/baton-term/tests/ime.rs` asserts it; do not let
+that test be weakened.
 
 **`crates/baton-term` may diverge, so its record has to keep up.** If
 `git diff --quiet "$BASE" -- crates/baton-term` fails, regenerate

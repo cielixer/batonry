@@ -15,11 +15,10 @@ The unit of work is `{{TARGET}}`.
 
 ## Non-negotiable rules for this repository
 
-**Never edit these directories:** `crates/baton-winit`, `crates/baton-iced`,
-`crates/baton-iced-winit`. They are **frozen** copies of upstream crates -- not
-identical to upstream, since `baton-winit` carries a deliberate macOS IME patch,
-but frozen -- and each carries an `UPSTREAM.diff` recording our divergence line
-by line, which stops making sense the moment they drift further. `crates/baton-term` is also a copy but is
+**Never edit `crates/winit`.** It is a **frozen** copy of an upstream crate --
+not identical to upstream, since it carries a deliberate macOS IME patch, but
+frozen -- and its `UPSTREAM.diff` records our divergence line by line, which
+stops making sense the moment it drifts further. `crates/baton-term` is also a copy but is
 expected to diverge: changes there are allowed, must be marked with a
 `// BATON:` comment, and require `UPSTREAM.diff` to be regenerated (its header
 documents how). If you believe a change to any of the other three is

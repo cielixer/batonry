@@ -13,7 +13,7 @@
 use std::borrow::Cow;
 
 use crate::action::{
-    Action, ArgKind, Binding, Channels, MENU, NO_CHANNEL, PALETTE, also,
+    Action, ArgKind, Binding, Channels, KEY_ONLY, MENU, PALETTE, union,
 };
 
 use crate::registry::Source;
@@ -21,14 +21,14 @@ use crate::registry::Source;
 /// Actions stage 1 can actually perform.
 pub const ACTIONS: &[Action] = &[
     act("app.quit", "Quit", PALETTE),
-    act("palette.open", "Command Palette", NO_CHANNEL),
-    act("palette.close", "Close Palette", NO_CHANNEL),
-    act("palette.confirm", "Run", NO_CHANNEL),
-    act("palette.next", "Next Result", NO_CHANNEL),
-    act("palette.prev", "Previous Result", NO_CHANNEL),
-    act("term.copy", "Copy", also(PALETTE, MENU)),
-    act("term.paste", "Paste", also(PALETTE, MENU)),
-    act("term.select_all", "Select All", NO_CHANNEL),
+    act("palette.open", "Command Palette", KEY_ONLY),
+    act("palette.close", "Close Palette", KEY_ONLY),
+    act("palette.confirm", "Run", KEY_ONLY),
+    act("palette.next", "Next Result", KEY_ONLY),
+    act("palette.prev", "Previous Result", KEY_ONLY),
+    act("term.copy", "Copy", union(PALETTE, MENU)),
+    act("term.paste", "Paste", union(PALETTE, MENU)),
+    act("term.select_all", "Select All", KEY_ONLY),
     act("term.clear", "Clear Screen", PALETTE),
 ];
 

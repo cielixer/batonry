@@ -18,8 +18,8 @@ use std::borrow::Cow;
 use std::collections::HashSet;
 
 use baton_action::{
-    ACTIONS, Action, ArgKind, BUILT_IN, MergeError, PALETTE, Source, index,
-    reaches, try_merge,
+    ACTIONS, Action, ArgKind, BUILT_IN, KEY_ONLY, MergeError, PALETTE, Source,
+    reachable_from, try_merge,
 };
 
 /// The ten ids stage 1 implements. Written out rather than derived from
@@ -88,7 +88,7 @@ fn every_action_has_a_label_and_stage_one_takes_no_arguments() {
 fn channels_distinguish_registry_membership_from_palette_visibility() {
     let visible = ACTIONS
         .iter()
-        .filter(|a| reaches(a.channels, PALETTE))
+        .filter(|a| reachable_from(a.channels, PALETTE))
         .count();
     assert!(
         visible > 0 && visible < ACTIONS.len(),
@@ -99,7 +99,7 @@ fn channels_distinguish_registry_membership_from_palette_visibility() {
     // The action that opens the palette must never be palette-visible: reaching
     // it from the palette would need the palette already open.
     let open = ACTIONS.iter().find(|a| a.id == "palette.open").unwrap();
-    assert!(!reaches(open.channels, PALETTE));
+    assert!(!reachable_from(open.channels, PALETTE));
 }
 
 /// The documented grammar says the middle segment is a verb and noun forms are
@@ -148,14 +148,18 @@ fn the_built_in_source_registers_and_indexes_every_row() {
     assert_eq!(r.len(), ACTIONS.len());
     assert!(!r.is_empty());
 
+    // Ids are handed out in contribution order. Asserting that through the
+    // public surface rather than through the integer: the id a name resolves to
+    // has to address the row at that name's position, and the ten names are
+    // distinct, so nothing but a dense in-order assignment satisfies it.
     for (position, row) in ACTIONS.iter().enumerate() {
         let id = r
-            .id(&row.id)
+            .resolve(&row.id)
             .unwrap_or_else(|| panic!("{} did not resolve", row.id));
-        assert_eq!(index(id), position);
         assert_eq!(r.get(id).unwrap(), row);
+        assert_eq!(&r.rows()[position], row);
     }
-    assert!(r.id("nope.missing").is_none());
+    assert!(r.resolve("nope.missing").is_none());
 }
 
 /// A table that arrives at runtime is the same kind of thing as the built-in
@@ -189,9 +193,9 @@ fn a_runtime_table_merges_beside_the_built_in_one() {
     // table existed still means the same thing.
     assert_eq!(r.rows()[0].id, ACTIONS[0].id);
 
-    let greet = r.id("plugin.greet").expect("the loaded row resolves");
+    let greet = r.resolve("plugin.greet").expect("the loaded row resolves");
     assert_eq!(r.get(greet).unwrap().label, "Say Hello");
-    let edit = r.id("host.edit").unwrap();
+    let edit = r.resolve("host.edit").unwrap();
     assert_eq!(r.get(edit).unwrap().arg, ArgKind::HostTab);
 }
 
@@ -307,7 +311,7 @@ fn a_duplicate_inside_one_source_is_also_rejected() {
 fn an_empty_source_list_produces_an_empty_registry() {
     let r = try_merge(&[]).unwrap();
     assert!(r.is_empty());
-    assert!(r.id("anything").is_none());
+    assert!(r.resolve("anything").is_none());
 }
 
 /// A test cannot observe an asymptote, so the structural property is asserted at
@@ -318,14 +322,42 @@ fn an_empty_source_list_produces_an_empty_registry() {
 fn name_lookup_does_not_scan_the_row_slice() {
     let src = include_str!("../src/registry.rs");
     let body = src
-        .split("pub fn id(&self")
+        .split("pub fn resolve(&self")
         .nth(1)
         .and_then(|rest| rest.split_once('}'))
         .map(|(body, _)| body)
-        .expect("Registry::id must exist with that signature");
+        .expect("Registry::resolve must exist with that signature");
 
-    assert!(body.contains("by_id"), "id() left the index: {body}");
+    assert!(body.contains("by_id"), "resolve() left the index: {body}");
     for scan in [".iter()", ".position(", "for "] {
-        assert!(!body.contains(scan), "id() contains {scan:?}: {body}");
+        assert!(!body.contains(scan), "resolve() contains {scan:?}: {body}");
     }
+}
+
+/// `KEY_ONLY` is the empty set, and every set contains the empty set. So it is a
+/// value to build a row with and never one to ask about -- a containment test
+/// against it answers `true` for everything, including an action that carries
+/// `PALETTE`.
+///
+/// Pinned because the reading is counter-intuitive and the obvious "fix" would
+/// be to special-case the empty set inside `reachable_from`, which would make it
+/// something other than containment.
+#[test]
+fn the_empty_channel_set_is_a_value_and_not_a_query() {
+    let key_only = ACTIONS
+        .iter()
+        .find(|a| a.id == "palette.open")
+        .expect("palette.open is registered");
+    let in_palette = ACTIONS
+        .iter()
+        .find(|a| a.id == "term.copy")
+        .expect("term.copy is registered");
+
+    assert_eq!(key_only.channels, KEY_ONLY);
+    assert!(!reachable_from(key_only.channels, PALETTE));
+
+    // Both answer `true`, which is why the question has to be asked with `==`.
+    assert!(reachable_from(key_only.channels, KEY_ONLY));
+    assert!(reachable_from(in_palette.channels, KEY_ONLY));
+    assert_ne!(in_palette.channels, KEY_ONLY);
 }

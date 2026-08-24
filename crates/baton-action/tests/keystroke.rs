@@ -17,9 +17,10 @@ fn ks(s: &str) -> Keystroke {
     s.parse().unwrap_or_else(|e| panic!("{s:?} rejected: {e}"))
 }
 
-/// The one thing that could go wrong silently: the modifier tables use
-/// bitflags constants in match patterns with a catch-all arm, so a mismatch
-/// would be swallowed rather than failing to compile.
+/// The parser, the formatter and the ordering check all read one table now, so
+/// a mismatch between them is no longer expressible. This pins the table itself:
+/// that each of the four names maps to the flag it claims, and that the flag
+/// prints back as the same name.
 #[test]
 fn each_modifier_parses_to_itself_and_prints_back() {
     for (text, flag) in [
@@ -226,4 +227,32 @@ fn a_hand_built_keystroke_with_an_exotic_modifier_does_not_round_trip() {
         code: Code::KeyA,
     };
     assert_eq!(ordinary.to_string().parse::<Keystroke>().unwrap(), ordinary);
+}
+
+/// The shorthand reaches the same value as the long form, which is the only
+/// reason it is allowed to exist: it is an abbreviation, not a second key.
+///
+/// Case is **not** part of it. `A` is rejected alongside `Meta` and `keya` in
+/// `everything_that_is_not_canonical_is_rejected`, and the three belong together
+/// -- one spelling per keystroke, normalising nothing. Accepting the letter but
+/// not the modifier would make the rule arbitrary.
+#[test]
+fn the_shorthand_is_an_abbreviation_of_the_long_form() {
+    assert_eq!(ks("a"), ks("KeyA"));
+    assert_eq!(ks("meta+a"), ks("meta+KeyA"));
+    assert_eq!(ks("meta+1"), ks("meta+Digit1"));
+    // And the canonical spelling it prints back is the long one.
+    assert_eq!(ks("meta+a").to_string(), "meta+KeyA");
+}
+
+/// The reviewer asked whether function keys are reachable. They are, and by the
+/// long form only -- there is no shorthand to collide with.
+#[test]
+fn function_keys_need_no_table_of_ours() {
+    for (spelling, expected) in
+        [("F1", Code::F1), ("F12", Code::F12), ("F24", Code::F24)]
+    {
+        assert_eq!(ks(spelling).code, expected);
+    }
+    assert_eq!(ks("meta+F2").to_string(), "meta+F2");
 }

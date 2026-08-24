@@ -111,59 +111,64 @@ impl fmt::Display for KeystrokeError {
 
 impl std::error::Error for KeystrokeError {}
 
-/// Canonical position, so one physical keystroke has one spelling.
-const fn rank(m: Modifiers) -> u8 {
-    match m {
-        Modifiers::META => 0,
-        Modifiers::SHIFT => 1,
-        Modifiers::ALT => 2,
-        _ => 3,
-    }
-}
-
-/// The four this syntax accepts, by their W3C names.
+/// The four modifiers this syntax names, in canonical order.
 ///
-/// **Deliberately not `cmd`.** That word belongs to one platform, and this
-/// crate makes no platform choice: `META` is `⌘` on macOS and the Windows key
-/// elsewhere. Which modifier an application treats as its primary is the
-/// application's decision, made where platform decisions are allowed to live.
-fn modifier(name: &str) -> Option<Modifiers> {
-    match name {
-        "meta" => Some(Modifiers::META),
-        "shift" => Some(Modifiers::SHIFT),
-        "alt" => Some(Modifiers::ALT),
-        "control" => Some(Modifiers::CONTROL),
-        _ => None,
-    }
-}
+/// **One list, deliberately.** The parser, the formatter and the ordering check
+/// all read it, so they cannot drift apart, and none of them needs a catch-all
+/// arm that quietly answers for a value it was never given. Adding a fifth
+/// modifier is an edit in one place.
+///
+/// **Deliberately not `cmd`, and not `command` either.** Those words belong to
+/// one platform, and this crate makes no platform choice: `META` is `⌘` on
+/// macOS and the Windows key elsewhere. Which modifier an application treats as
+/// its primary is the application's decision, made where platform decisions are
+/// allowed to live.
+const MODIFIERS: [(Modifiers, &str); 4] = [
+    (Modifiers::META, "meta"),
+    (Modifiers::SHIFT, "shift"),
+    (Modifiers::ALT, "alt"),
+    (Modifiers::CONTROL, "control"),
+];
 
-fn modifier_name(m: Modifiers) -> &'static str {
-    match m {
-        Modifiers::META => "meta",
-        Modifiers::SHIFT => "shift",
-        Modifiers::ALT => "alt",
-        _ => "control",
-    }
+/// The flag a name stands for, and its canonical position.
+///
+/// The position comes back with the flag because the position is what the
+/// ordering check wants. Looking it up again by flag is what would need an arm
+/// for "some other bitflag", and there is no honest answer to put there.
+fn modifier(name: &str) -> Option<(Modifiers, u8)> {
+    MODIFIERS
+        .iter()
+        .position(|(_, spelling)| *spelling == name)
+        .map(|i| (MODIFIERS[i].0, i as u8))
 }
 
 /// A single letter or digit is shorthand; anything else is a W3C code name.
 ///
 /// The long form is what keeps this crate free of a key table -- every one of
-/// the 216 codes is reachable, and none of them is ours to keep up to date.
-fn key(name: &str) -> Result<Code, KeystrokeError> {
-    let bytes = name.as_bytes();
-    if bytes.len() == 1 {
-        let expanded = match bytes[0] {
-            b'a'..=b'z' => format!("Key{}", name.to_ascii_uppercase()),
-            b'0'..=b'9' => format!("Digit{name}"),
-            _ => name.to_owned(),
-        };
-        if let Ok(code) = Code::from_str(&expanded) {
-            return Ok(code);
+/// the 216 codes is reachable, `F1` through `F24` included, and none of them is
+/// ours to keep up to date.
+///
+/// **The shorthand is lowercase, and that is not an oversight.** `A` is rejected
+/// for the same reason `Meta` and `keya` are: this syntax has exactly one
+/// spelling per keystroke and normalises nothing, so there is no second string
+/// that could reach the same value by a different route. Accepting `A` while
+/// still rejecting `Meta` would make the rule arbitrary, and accepting all three
+/// would give every chord a family of spellings for a keymap file to disagree
+/// with itself in.
+fn parse_code(name: &str) -> Result<Code, KeystrokeError> {
+    let expanded = match name.as_bytes() {
+        [c @ b'a'..=b'z'] => {
+            Some(format!("Key{}", c.to_ascii_uppercase() as char))
+        },
+        [c @ b'0'..=b'9'] => Some(format!("Digit{}", *c as char)),
+        _ => None,
+    };
+    // One parse, and an allocation only for the shorthand. The long form is
+    // handed to `from_str` exactly as it was written.
+    Code::from_str(expanded.as_deref().unwrap_or(name)).map_err(|_| {
+        KeystrokeError::UnknownKey {
+            name: name.to_owned(),
         }
-    }
-    Code::from_str(name).map_err(|_| KeystrokeError::UnknownKey {
-        name: name.to_owned(),
     })
 }
 
@@ -178,8 +183,9 @@ impl FromStr for Keystroke {
     /// no second spelling that could hash differently.
     ///
     /// `FromStr` rather than a free function because a keymap file is
-    /// configuration, and a deserializer reaches a value through `parse`. One
-    /// way in, for the same reason the fields are private.
+    /// configuration, and a deserializer reaches a value through `parse`. The
+    /// fields are public, so this is not the only way to build a value -- it is
+    /// the only way a *string* becomes one, which is what a keymap file needs.
     fn from_str(input: &str) -> Result<Keystroke, KeystrokeError> {
         if input.is_empty() {
             return Err(KeystrokeError::MissingKey);
@@ -195,31 +201,31 @@ impl FromStr for Keystroke {
         }
 
         let mut modifiers = Modifiers::empty();
-        let mut previous: Option<Modifiers> = None;
+        let mut previous: Option<(&str, u8)> = None;
         for name in parts {
             if name.is_empty() {
                 return Err(KeystrokeError::EmptyComponent);
             }
-            let Some(m) = modifier(name) else {
+            let Some((flag, rank)) = modifier(name) else {
                 return Err(KeystrokeError::UnknownModifier {
                     name: name.to_owned(),
                 });
             };
-            if modifiers.contains(m) {
+            if modifiers.contains(flag) {
                 return Err(KeystrokeError::RepeatedModifier {
                     name: name.to_owned(),
                 });
             }
-            if let Some(earlier) = previous
-                && rank(m) < rank(earlier)
+            if let Some((earlier, earlier_rank)) = previous
+                && rank < earlier_rank
             {
                 return Err(KeystrokeError::ModifierOutOfOrder {
-                    previous: modifier_name(earlier).to_owned(),
+                    previous: earlier.to_owned(),
                     current: name.to_owned(),
                 });
             }
-            previous = Some(m);
-            modifiers |= m;
+            previous = Some((name, rank));
+            modifiers |= flag;
         }
 
         // A modifier in the key position means no key was named.
@@ -229,7 +235,7 @@ impl FromStr for Keystroke {
 
         Ok(Keystroke {
             modifiers,
-            code: key(key_name)?,
+            code: parse_code(key_name)?,
         })
     }
 }
@@ -237,14 +243,9 @@ impl FromStr for Keystroke {
 impl fmt::Display for Keystroke {
     /// The canonical spelling, so a parse round-trips.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for m in [
-            Modifiers::META,
-            Modifiers::SHIFT,
-            Modifiers::ALT,
-            Modifiers::CONTROL,
-        ] {
-            if self.modifiers.contains(m) {
-                write!(f, "{}+", modifier_name(m))?;
+        for (flag, spelling) in MODIFIERS {
+            if self.modifiers.contains(flag) {
+                write!(f, "{spelling}+")?;
             }
         }
         write!(f, "{}", self.code)

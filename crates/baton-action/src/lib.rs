@@ -1,12 +1,17 @@
 //! Mechanism for a command system: names, chords, keymap rows, and an index.
 //!
-//! **This crate does not know what application it serves.** It has no notion of
-//! a palette, a menu, a click, a pane or a host; it does not depend on `iced`;
-//! and it does not contain a list of anything's actions. Those are the
-//! application's, and keeping them out is what makes this crate worth
-//! extracting later.
+//! **This crate owns Baton's action catalog, and it is not an extraction
+//! candidate.** An earlier shape pushed the rows out to whatever drove it, on
+//! the theory that this crate would be published on its own; that plan was
+//! withdrawn, so the tables came back in ([`ACTIONS`], [`DEFAULT_KEYMAP`]) and
+//! there is one place to look instead of a wiring step.
 //!
-//! What it does provide:
+//! What stayed from that shape is worth keeping: it still does not depend on
+//! `iced`, still has no notion of a pane or a host, and still names no platform.
+//! Those are boundaries the tables do not need to cross, not preparation for a
+//! move.
+//!
+//! What it provides:
 //!
 //! - [`Keystroke`] and one canonical syntax for writing one, so a configuration
 //!   file and a built-in default go through the same parser. **Keys are
@@ -24,7 +29,9 @@
 //!   palette possible at all.
 //! - **[`Channels`]** -- where an action can be invoked *other than by a key*:
 //!   palette, click, menu, drag. There is no `KEY` bit, because key reachability
-//!   is whatever the keymap says and changes when someone rebinds.
+//!   is whatever the keymap says and changes when someone rebinds. The empty set
+//!   is [`KEY_ONLY`], and it is a value to build a row with rather than one to
+//!   ask about: every set contains it.
 //! - **[`ArgKind`]** -- the *shape* of the argument an action expects, not the
 //!   type. The value travels beside the id when the action is issued.
 //! - **Id** -- the permanent name, by convention `<domain>.<verb>[.<variant>]`
@@ -32,7 +39,8 @@
 //! - **[`ActionId`]** -- **not** the above, despite reading like it. A name is a
 //!   string that outlives releases; an `ActionId` is a position the registry
 //!   hands out at boot, so resolving one is a bounds check instead of a lookup.
-//!   It means nothing outside the run that issued it. Names cross process
+//!   It means nothing outside the **registry** that issued it -- two registries
+//!   in one process hand out overlapping indices. Names cross process
 //!   boundaries; `ActionId`s never should.
 //! - **[`Binding`]** -- one way to reach one action: a chord, and optionally a
 //!   condition. Several may point at one action, or none.
@@ -76,10 +84,10 @@ mod keystroke;
 mod registry;
 
 pub use action::{
-    Action, ArgKind, Binding, CLICK, Channels, DRAG, MENU, NO_CHANNEL, PALETTE,
-    also, reaches,
+    Action, ArgKind, Binding, CLICK, Channels, DRAG, KEY_ONLY, MENU, PALETTE,
+    reachable_from, union,
 };
 pub use catalog::{ACTIONS, BUILT_IN, DEFAULT_KEYMAP};
 
 pub use keystroke::{Keystroke, KeystrokeError};
-pub use registry::{ActionId, MergeError, Registry, Source, index, try_merge};
+pub use registry::{ActionId, MergeError, Registry, Source, try_merge};

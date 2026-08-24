@@ -10,15 +10,24 @@ use crate::action::Action;
 ///
 /// **Not an id.** A name is a string that crosses process boundaries; this is a
 /// position handed out at boot, so resolving it is a bounds check rather than a
-/// lookup, and it means nothing outside the run that issued it. The field stays
-/// private: an index the registry did not hand out points at an arbitrary row,
-/// and that is worth making impossible to write.
+/// lookup.
+///
+/// **It means nothing outside the [`Registry`] that issued it** -- not merely
+/// outside the run. Two registries built in one process hand out overlapping
+/// indices, so an id from one silently addresses an unrelated row in the other.
+/// The type does not carry which registry it came from; if a second registry
+/// ever exists, that is the hazard to design against.
+///
+/// The field stays private, and so does the accessor: an index the registry did
+/// not hand out points at an arbitrary row, and a caller holding the integer is
+/// a caller that can compute one.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[repr(transparent)]
 pub struct ActionId(u16);
 
-/// The position an [`ActionId`] stands for.
-pub const fn index(id: ActionId) -> usize {
+/// The position an [`ActionId`] stands for. Crate-private on purpose: the whole
+/// point of the opaque handle is that nothing outside computes one.
+const fn index(id: ActionId) -> usize {
     id.0 as usize
 }
 
@@ -56,8 +65,13 @@ impl Registry {
         self.rows.get(index(id))
     }
 
-    /// Resolves a name to an index. **Not a scan of the row slice.**
-    pub fn id(&self, name: &str) -> Option<ActionId> {
+    /// Resolves a permanent name to an issued index. **Not a scan of the row
+    /// slice.**
+    ///
+    /// Named `resolve` rather than `id` because the two things it stands between
+    /// are both called an id in ordinary speech, and `registry.id(..)` reads
+    /// like the registry's own.
+    pub fn resolve(&self, name: &str) -> Option<ActionId> {
         self.by_id.get(name).copied()
     }
 
@@ -112,8 +126,8 @@ impl fmt::Display for MergeError {
                 second_position,
             } => write!(
                 f,
-                "duplicate action id {id:?}: {first_source} row \
-                 {first_position} collides with {second_source} row \
+                "duplicate action id {id:?}: {first_source} index \
+                 {first_position} collides with {second_source} index \
                  {second_position}",
             ),
             Self::TooManyRows { count } => write!(
@@ -150,7 +164,14 @@ pub fn try_merge(sources: &[Source]) -> Result<Registry, MergeError> {
     let mut rows: Vec<Action> = Vec::with_capacity(count);
     let mut by_id: HashMap<String, ActionId> = HashMap::with_capacity(count);
     // Where each name came from, kept only so a duplicate can name both sides.
-    let mut origin: HashMap<String, (String, usize)> =
+    //
+    // **Borrowed, not owned.** Every string it needs already lives in `sources`
+    // and outlives this call, so owning them would allocate twice per row --
+    // once for the name and once for the source name, the second of which is
+    // the same string copied for every row a source contributes -- to serve a
+    // path that a correct table never takes. The owned strings are built where
+    // they are actually needed: inside the error.
+    let mut origin: HashMap<&str, (&str, usize)> =
         HashMap::with_capacity(count);
 
     for source in sources {
@@ -160,7 +181,7 @@ pub fn try_merge(sources: &[Source]) -> Result<Registry, MergeError> {
             {
                 return Err(MergeError::DuplicateId {
                     id: row.id.to_string(),
-                    first_source: first_source.clone(),
+                    first_source: (*first_source).to_owned(),
                     first_position: *first_position,
                     second_source: source.name.to_string(),
                     second_position: position,
@@ -173,10 +194,7 @@ pub fn try_merge(sources: &[Source]) -> Result<Registry, MergeError> {
             let next = u16::try_from(rows.len())
                 .map_err(|_| MergeError::TooManyRows { count })?;
             by_id.insert(row.id.to_string(), ActionId(next));
-            origin.insert(
-                row.id.to_string(),
-                (source.name.to_string(), position),
-            );
+            origin.insert(row.id.as_ref(), (source.name.as_ref(), position));
             rows.push(row.clone());
         }
     }

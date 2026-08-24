@@ -13,4 +13,10 @@
 /_to_delete/
 _to_delete/
 /.omx/
-/crates/baton-winit/target
+/crates/winit/target
+
+# Personal Claude Code settings. `.claude/skills/` is tracked; these two are not
+# -- they hold per-machine preferences (enabled plugins, output style) and this
+# repository is public.
+/.claude/settings.json
+/.claude/settings.local.json

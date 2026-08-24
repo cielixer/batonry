@@ -26,6 +26,8 @@ use std::borrow::Cow;
 /// different things. A modal's confirm button goes through the registry, so a
 /// click never calls a function directly, but nobody hunts for it in a palette
 /// -- it carries `CLICK` without `PALETTE`.
+///
+/// The empty set is [`KEY_ONLY`]; read its note before using it in a comparison.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 #[repr(transparent)]
 pub struct Channels(u8);
@@ -38,16 +40,27 @@ pub const CLICK: Channels = Channels(1 << 1);
 pub const MENU: Channels = Channels(1 << 2);
 /// A drag gesture.
 pub const DRAG: Channels = Channels(1 << 3);
-/// Reachable only by key, or not yet reachable at all.
-pub const NO_CHANNEL: Channels = Channels(0);
+/// No non-key surface. Every action carrying this is reached by a key instead,
+/// which a test in the keymap suite asserts row by row.
+///
+/// **This is a value to build a row with, never one to ask about.** It is the
+/// empty set, and every set contains the empty set, so
+/// [`reachable_from`]`(anything, KEY_ONLY)` is `true` -- including for an action
+/// that carries `PALETTE`. Asking "does this reach nothing?" is
+/// `set == KEY_ONLY`, not a containment test.
+pub const KEY_ONLY: Channels = Channels(0);
 
-/// Whether every bit in `wanted` is present.
-pub const fn reaches(set: Channels, wanted: Channels) -> bool {
-    set.0 & wanted.0 == wanted.0
+/// Whether `set` includes every bit of `surface`.
+///
+/// Named for the question it answers -- "can the palette get at this?" -- rather
+/// than for the bit arithmetic, because that is what the call site is asking.
+pub const fn reachable_from(set: Channels, surface: Channels) -> bool {
+    set.0 & surface.0 == surface.0
 }
 
-/// Combines channels. `const`, because the table is a constant.
-pub const fn also(set: Channels, extra: Channels) -> Channels {
+/// Set union. A `const fn` and not `BitOr`, because operator traits are not
+/// callable in the `const` context the table is built in.
+pub const fn union(set: Channels, extra: Channels) -> Channels {
     Channels(set.0 | extra.0)
 }
 

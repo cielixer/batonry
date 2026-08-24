@@ -13,7 +13,7 @@ fn every_binding_names_an_action_that_exists() {
     let registry = try_merge(&[BUILT_IN]).unwrap();
     for b in DEFAULT_KEYMAP {
         assert!(
-            registry.id(&b.action).is_some(),
+            registry.resolve(&b.action).is_some(),
             "{:?} is bound to {:?}, which is not registered. A dangling \
              binding is a key that silently does nothing",
             b.key,

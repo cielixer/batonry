@@ -9,6 +9,14 @@
 //! Both tables are `const`. Anything that has to change without a rebuild --
 //! a rebound key, a row from something loaded -- arrives as a second source and
 //! is merged on top; see [`crate::try_merge`].
+//!
+//! **The two tables stay two, and the id they join on is written once.** An
+//! action may carry no binding at all (roughly twenty of the specification's
+//! rows are palette- and menu-only) or several (`pane.resize.*` has a key and a
+//! drag), and a user's keymap adds `Binding` rows without adding `Action` rows,
+//! so a binding cannot be a field of an action. What it can stop being is a
+//! second copy of the same string: the [`id`] constants below are the join key,
+//! and a typo is a build failure rather than a binding that resolves to nothing.
 
 use std::borrow::Cow;
 
@@ -18,18 +26,36 @@ use crate::action::{
 
 use crate::registry::Source;
 
+/// The permanent names, written once because both tables join on them.
+///
+/// Not public: outside this crate an action is reached through
+/// [`Registry::resolve`](crate::Registry::resolve), which is what a keymap file
+/// and a palette query both go through.
+mod id {
+    pub const APP_QUIT: &str = "app.quit";
+    pub const PALETTE_OPEN: &str = "palette.open";
+    pub const PALETTE_CLOSE: &str = "palette.close";
+    pub const PALETTE_CONFIRM: &str = "palette.confirm";
+    pub const PALETTE_NEXT: &str = "palette.next";
+    pub const PALETTE_PREV: &str = "palette.prev";
+    pub const TERM_COPY: &str = "term.copy";
+    pub const TERM_PASTE: &str = "term.paste";
+    pub const TERM_SELECT_ALL: &str = "term.select_all";
+    pub const TERM_CLEAR: &str = "term.clear";
+}
+
 /// Actions stage 1 can actually perform.
 pub const ACTIONS: &[Action] = &[
-    act("app.quit", "Quit", PALETTE),
-    act("palette.open", "Command Palette", KEY_ONLY),
-    act("palette.close", "Close Palette", KEY_ONLY),
-    act("palette.confirm", "Run", KEY_ONLY),
-    act("palette.next", "Next Result", KEY_ONLY),
-    act("palette.prev", "Previous Result", KEY_ONLY),
-    act("term.copy", "Copy", union(PALETTE, MENU)),
-    act("term.paste", "Paste", union(PALETTE, MENU)),
-    act("term.select_all", "Select All", KEY_ONLY),
-    act("term.clear", "Clear Screen", PALETTE),
+    act(id::APP_QUIT, "Quit", PALETTE),
+    act(id::PALETTE_OPEN, "Command Palette", KEY_ONLY),
+    act(id::PALETTE_CLOSE, "Close Palette", KEY_ONLY),
+    act(id::PALETTE_CONFIRM, "Run", KEY_ONLY),
+    act(id::PALETTE_NEXT, "Next Result", KEY_ONLY),
+    act(id::PALETTE_PREV, "Previous Result", KEY_ONLY),
+    act(id::TERM_COPY, "Copy", union(PALETTE, MENU)),
+    act(id::TERM_PASTE, "Paste", union(PALETTE, MENU)),
+    act(id::TERM_SELECT_ALL, "Select All", KEY_ONLY),
+    act(id::TERM_CLEAR, "Clear Screen", PALETTE),
 ];
 
 /// Every stage-1 action takes no argument, so the shape is not repeated ten
@@ -54,16 +80,16 @@ const fn act(
 /// silently stops reaching the shell, which is the first thing a terminal user
 /// notices.
 pub const DEFAULT_KEYMAP: &[Binding] = &[
-    bind("palette.open", "meta+KeyK", Some("!palette_open")),
-    bind("palette.close", "Escape", Some("palette_open")),
-    bind("palette.confirm", "Enter", Some("palette_open")),
-    bind("palette.next", "ArrowDown", Some("palette_open")),
-    bind("palette.prev", "ArrowUp", Some("palette_open")),
-    bind("app.quit", "meta+KeyQ", None),
-    bind("term.copy", "meta+KeyC", Some("has_selection")),
-    bind("term.paste", "meta+KeyV", Some("pane_live")),
-    bind("term.select_all", "meta+KeyA", Some("pane_focused")),
-    bind("term.clear", "meta+shift+KeyK", Some("pane_live")),
+    bind(id::PALETTE_OPEN, "meta+KeyK", Some("!palette_open")),
+    bind(id::PALETTE_CLOSE, "Escape", Some("palette_open")),
+    bind(id::PALETTE_CONFIRM, "Enter", Some("palette_open")),
+    bind(id::PALETTE_NEXT, "ArrowDown", Some("palette_open")),
+    bind(id::PALETTE_PREV, "ArrowUp", Some("palette_open")),
+    bind(id::APP_QUIT, "meta+KeyQ", None),
+    bind(id::TERM_COPY, "meta+KeyC", Some("has_selection")),
+    bind(id::TERM_PASTE, "meta+KeyV", Some("pane_live")),
+    bind(id::TERM_SELECT_ALL, "meta+KeyA", Some("pane_focused")),
+    bind(id::TERM_CLEAR, "meta+shift+KeyK", Some("pane_live")),
 ];
 
 const fn bind(

@@ -45,7 +45,6 @@ fn every_action_stage_one_implements_is_reachable_somehow() {
             a.id
         );
     }
-    assert_eq!(DEFAULT_KEYMAP.len(), ACTIONS.len());
 }
 
 /// A chord may repeat when the conditions are disjoint -- deciding that is the

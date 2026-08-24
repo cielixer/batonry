@@ -21,20 +21,14 @@ use keyboard_types::{Code, Modifiers};
 
 /// A modifier set plus one physical key. Plain data.
 ///
-/// One physical keystroke is exactly one value -- which whatever detects
-/// conflicting bindings relies on, since it groups by this -- but that comes
-/// from the representation rather than from hiding it: [`Modifiers`] is a
-/// bitflag set with no ordering, so `SHIFT | META` and `META | SHIFT` are the
-/// same value, and a [`Code`] is a [`Code`].
+/// One physical keystroke is exactly one value, which conflict detection relies
+/// on: [`Modifiers`] is an unordered bitflag set, so `SHIFT | META` and
+/// `META | SHIFT` are the same value, and a [`Code`] is a [`Code`].
 ///
-/// # The one thing to know about building one by hand
-///
-/// [`Modifiers`] defines fourteen flags; this syntax names four, and so does
-/// [`Display`](fmt::Display). A value carrying, say, `Modifiers::FN` therefore
-/// prints without it and does not round-trip. That is not a hazard in practice
-/// -- winit reports exactly four modifier states, so nothing else can arrive
-/// from an event -- and if it ever becomes one, the formatter grows rather than
-/// the fields becoming private again.
+/// [`Modifiers`] defines fourteen flags; this syntax and
+/// [`Display`](fmt::Display) name four. A value built by hand carrying, say,
+/// `Modifiers::FN` prints without it and does not round-trip. Nothing else can
+/// arrive from an event: winit reports exactly four modifier states.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Keystroke {
     /// The modifiers held down.
@@ -113,16 +107,13 @@ impl std::error::Error for KeystrokeError {}
 
 /// The four modifiers this syntax names, in canonical order.
 ///
-/// **One list, deliberately.** The parser, the formatter and the ordering check
-/// all read it, so they cannot drift apart, and none of them needs a catch-all
-/// arm that quietly answers for a value it was never given. Adding a fifth
-/// modifier is an edit in one place.
+/// The parser, the formatter and the ordering check all read this list, so they
+/// cannot drift and a fifth modifier is one edit.
 ///
-/// **Deliberately not `cmd`, and not `command` either.** Those words belong to
-/// one platform, and this crate makes no platform choice: `META` is `⌘` on
-/// macOS and the Windows key elsewhere. Which modifier an application treats as
-/// its primary is the application's decision, made where platform decisions are
-/// allowed to live.
+/// **Not `cmd`, and not `command` either.** Those words belong to one platform
+/// and this crate makes no platform choice: `META` is `⌘` on macOS and the
+/// Windows key elsewhere. Which modifier is primary is the application's
+/// decision, made where platform decisions belong.
 const MODIFIERS: [(Modifiers, &str); 4] = [
     (Modifiers::META, "meta"),
     (Modifiers::SHIFT, "shift"),
@@ -133,8 +124,7 @@ const MODIFIERS: [(Modifiers, &str); 4] = [
 /// The flag a name stands for, and its canonical position.
 ///
 /// The position comes back with the flag because the position is what the
-/// ordering check wants. Looking it up again by flag is what would need an arm
-/// for "some other bitflag", and there is no honest answer to put there.
+/// ordering check wants.
 fn modifier(name: &str) -> Option<(Modifiers, u8)> {
     MODIFIERS
         .iter()
@@ -144,27 +134,19 @@ fn modifier(name: &str) -> Option<(Modifiers, u8)> {
 
 /// A single letter or digit is shorthand; anything else is a W3C code name.
 ///
-/// The long form is what keeps this crate free of a key table -- every one of
-/// the 216 codes is reachable, `F1` through `F24` included, and none of them is
-/// ours to keep up to date.
-///
-/// **The shorthand is lowercase, and that is not an oversight.** `A` is rejected
-/// for the same reason `Meta` and `keya` are: this syntax has exactly one
-/// spelling per keystroke and normalises nothing, so there is no second string
-/// that could reach the same value by a different route. Accepting `A` while
-/// still rejecting `Meta` would make the rule arbitrary, and accepting all three
-/// would give every chord a family of spellings for a keymap file to disagree
-/// with itself in.
+/// The long form keeps a key table out of this crate: all 216 codes are
+/// reachable, `F1` through `F24` included.
 fn parse_code(name: &str) -> Result<Code, KeystrokeError> {
     let expanded = match name.as_bytes() {
+        // Lowercase only. One spelling per keystroke, normalising nothing, so
+        // `A` is rejected for the same reason `Meta` is.
         [c @ b'a'..=b'z'] => {
             Some(format!("Key{}", c.to_ascii_uppercase() as char))
         },
         [c @ b'0'..=b'9'] => Some(format!("Digit{}", *c as char)),
         _ => None,
     };
-    // One parse, and an allocation only for the shorthand. The long form is
-    // handed to `from_str` exactly as it was written.
+    // One parse, and an allocation only for the shorthand.
     Code::from_str(expanded.as_deref().unwrap_or(name)).map_err(|_| {
         KeystrokeError::UnknownKey {
             name: name.to_owned(),
@@ -179,13 +161,10 @@ impl FromStr for Keystroke {
     ///
     /// Modifiers come first, in the canonical order `meta`, `shift`, `alt`,
     /// `control`. Out-of-order spellings are **rejected rather than
-    /// normalised**, because rejecting is the cheaper guarantee: there is then
-    /// no second spelling that could hash differently.
+    /// normalised**: no second spelling can then hash differently.
     ///
-    /// `FromStr` rather than a free function because a keymap file is
-    /// configuration, and a deserializer reaches a value through `parse`. The
-    /// fields are public, so this is not the only way to build a value -- it is
-    /// the only way a *string* becomes one, which is what a keymap file needs.
+    /// `FromStr` because a keymap file is configuration, and a deserializer
+    /// reaches a value through `parse`.
     fn from_str(input: &str) -> Result<Keystroke, KeystrokeError> {
         if input.is_empty() {
             return Err(KeystrokeError::MissingKey);

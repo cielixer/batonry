@@ -103,12 +103,11 @@ fn channels_distinguish_registry_membership_from_palette_visibility() {
 }
 
 /// The documented grammar says the middle segment is a verb and noun forms are
-/// forbidden. **That cannot be checked**, and this records why rather than
-/// leaving a future reader to rediscover it: the canonical table breaks it in
-/// about eleven rows -- `sidebar.mode.hosts` has no verb at all,
-/// `term.search.open` and `term.font.increase` and `conn.input.flush` put a noun
-/// in the middle, and `term.scroll.line.up` has four segments. The rule stays as
-/// naming guidance. These are the parts that are true.
+/// forbidden. **That cannot be checked:** the canonical table breaks it in about
+/// eleven rows -- `sidebar.mode.hosts` has no verb at all, `term.search.open`
+/// and `term.font.increase` and `conn.input.flush` put a noun in the middle, and
+/// `term.scroll.line.up` has four segments. The rule stays naming guidance;
+/// these are the parts that are true.
 #[test]
 fn id_grammar_is_only_what_can_be_checked() {
     let domains: HashSet<&str> = DOMAINS.into_iter().collect();
@@ -334,14 +333,11 @@ fn name_lookup_does_not_scan_the_row_slice() {
     }
 }
 
-/// `KEY_ONLY` is the empty set, and every set contains the empty set. So it is a
-/// value to build a row with and never one to ask about -- a containment test
-/// against it answers `true` for everything, including an action that carries
-/// `PALETTE`.
+/// A containment test against `KEY_ONLY` answers `true` for everything,
+/// `PALETTE` included, because it is the empty set.
 ///
-/// Pinned because the reading is counter-intuitive and the obvious "fix" would
-/// be to special-case the empty set inside `reachable_from`, which would make it
-/// something other than containment.
+/// Pinned so the obvious "fix" is not made: special-casing the empty set inside
+/// `reachable_from` would make it something other than containment.
 #[test]
 fn the_empty_channel_set_is_a_value_and_not_a_query() {
     let key_only = ACTIONS

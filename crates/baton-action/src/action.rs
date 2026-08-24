@@ -6,12 +6,6 @@
 //! replaceable and there may be several or none. The condition belongs to the
 //! binding, not the action, because what it decides is whether a keystroke
 //! becomes an action at all.
-//!
-//! Both tables live in this crate rather than in whatever drives it. That is a
-//! deliberate reversal: an earlier shape pushed the rows out on the theory that
-//! this crate would be extracted and published, and it will not be. Keeping them
-//! here means one place to look, a compile-time constant instead of a wiring
-//! step, and no vocabulary split across a boundary nobody was going to cross.
 
 use std::borrow::Cow;
 
@@ -43,17 +37,12 @@ pub const DRAG: Channels = Channels(1 << 3);
 /// No non-key surface. Every action carrying this is reached by a key instead,
 /// which a test in the keymap suite asserts row by row.
 ///
-/// **This is a value to build a row with, never one to ask about.** It is the
-/// empty set, and every set contains the empty set, so
-/// [`reachable_from`]`(anything, KEY_ONLY)` is `true` -- including for an action
-/// that carries `PALETTE`. Asking "does this reach nothing?" is
-/// `set == KEY_ONLY`, not a containment test.
+/// **A value to build a row with, never one to ask about.** It is the empty set,
+/// so [`reachable_from`]`(anything, KEY_ONLY)` is `true`, `PALETTE` included.
+/// "Does this reach nothing?" is `set == KEY_ONLY`.
 pub const KEY_ONLY: Channels = Channels(0);
 
 /// Whether `set` includes every bit of `surface`.
-///
-/// Named for the question it answers -- "can the palette get at this?" -- rather
-/// than for the bit arithmetic, because that is what the call site is asking.
 pub const fn reachable_from(set: Channels, surface: Channels) -> bool {
     set.0 & surface.0 == surface.0
 }
@@ -97,10 +86,8 @@ pub enum ArgShape {
 
 /// One thing the app can do.
 ///
-/// Strings are `Cow` for the same reason a binding's are: the built-in table
-/// borrows literals and stays a constant, while a row that arrives at runtime --
-/// from a configuration file, or one day from something loaded -- owns its
-/// strings and is the same type. One table, two origins.
+/// Strings are `Cow` so one table has two origins: the built-in rows borrow
+/// literals and stay a constant, a row loaded at runtime owns its strings.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Action {
     /// The permanent name, `<domain>.<verb>[.<variant>]` as in `host.connect`.
@@ -116,13 +103,6 @@ pub struct Action {
 }
 
 /// One way to reach one action.
-///
-/// `Cow` rather than `&'static str` is the whole reason a binding is separate
-/// from whatever describes an action: a keymap loaded from a configuration file
-/// owns its strings at runtime, and if this were `&'static` the loader would
-/// have to leak or intern them. Built-in bindings borrow literals and are
-/// therefore still `const`-constructible; loaded ones own theirs. Both are the
-/// same type, so a user's file really is more rows in the same table.
 ///
 /// `when` stays opaque here. It is a guard on the *binding*, so what it decides
 /// is whether a keystroke becomes an action at all or falls through to whatever

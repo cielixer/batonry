@@ -17,10 +17,8 @@ fn ks(s: &str) -> Keystroke {
     s.parse().unwrap_or_else(|e| panic!("{s:?} rejected: {e}"))
 }
 
-/// The parser, the formatter and the ordering check all read one table now, so
-/// a mismatch between them is no longer expressible. This pins the table itself:
-/// that each of the four names maps to the flag it claims, and that the flag
-/// prints back as the same name.
+/// Pins the modifier table: each of the four names maps to the flag it claims,
+/// and the flag prints back as the same name.
 #[test]
 fn each_modifier_parses_to_itself_and_prints_back() {
     for (text, flag) in [
@@ -199,13 +197,9 @@ fn a_condition_is_opaque() {
     assert_eq!(guarded.when.as_deref(), Some("!palette_open && x==1"));
 }
 
-/// Pins the one consequence of the fields being public, so a future change to it
-/// is deliberate rather than a surprise.
-///
 /// `Modifiers` defines fourteen flags; this syntax names four, and so does
-/// `Display`. A hand-built value carrying anything else prints without it. That
-/// is not reachable from an event -- winit reports exactly four modifier states
-/// -- so the fields stay public and the formatter is what would grow.
+/// `Display`. A hand-built value carrying anything else prints without it. Not
+/// reachable from an event, since winit reports exactly four modifier states.
 #[test]
 fn a_hand_built_keystroke_with_an_exotic_modifier_does_not_round_trip() {
     let exotic = Keystroke {
@@ -232,10 +226,8 @@ fn a_hand_built_keystroke_with_an_exotic_modifier_does_not_round_trip() {
 /// The shorthand reaches the same value as the long form, which is the only
 /// reason it is allowed to exist: it is an abbreviation, not a second key.
 ///
-/// Case is **not** part of it. `A` is rejected alongside `Meta` and `keya` in
-/// `everything_that_is_not_canonical_is_rejected`, and the three belong together
-/// -- one spelling per keystroke, normalising nothing. Accepting the letter but
-/// not the modifier would make the rule arbitrary.
+/// Case is **not** part of it: `A` is rejected alongside `Meta` and `keya` in
+/// `everything_that_is_not_canonical_is_rejected`.
 #[test]
 fn the_shorthand_is_an_abbreviation_of_the_long_form() {
     assert_eq!(ks("a"), ks("KeyA"));

@@ -12,15 +12,14 @@ use crate::action::Action;
 /// position handed out at boot, so resolving it is a bounds check rather than a
 /// lookup.
 ///
-/// **It means nothing outside the [`Registry`] that issued it** -- not merely
-/// outside the run. Two registries built in one process hand out overlapping
-/// indices, so an id from one silently addresses an unrelated row in the other.
-/// The type does not carry which registry it came from; if a second registry
-/// ever exists, that is the hazard to design against.
+/// **It means nothing outside the [`Registry`] that issued it**, not merely
+/// outside the run. Two registries in one process hand out overlapping indices,
+/// so an index from one silently addresses an unrelated row in the other. The
+/// type does not carry its origin; a second registry is the hazard to design
+/// against.
 ///
-/// The field stays private, and so does the accessor: an index the registry did
-/// not hand out points at an arbitrary row, and a caller holding the integer is
-/// a caller that can compute one.
+/// The field and the accessor are both private: a caller holding the integer is
+/// a caller that can compute one the registry never issued.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[repr(transparent)]
 pub struct ActionId(u16);
@@ -50,9 +49,8 @@ pub struct Source {
 /// Rows in contribution order, plus a name index.
 ///
 /// Rows stay contiguous so iteration is a walk and an [`ActionId`] is an index.
-/// This keeps methods rather than exposing fields, because it is the one type
-/// here that owns an invariant: the map and the slice have to agree, and nothing
-/// outside should be able to put them out of step.
+/// The one type here with methods, because it is the one that owns an invariant:
+/// the map and the slice have to agree.
 #[derive(Debug, Default)]
 pub struct Registry {
     rows: Vec<Action>,
@@ -67,10 +65,6 @@ impl Registry {
 
     /// Resolves a permanent name to an issued index. **Not a scan of the row
     /// slice.**
-    ///
-    /// Named `resolve` rather than `id` because the two things it stands between
-    /// are both called an id in ordinary speech, and `registry.id(..)` reads
-    /// like the registry's own.
     pub fn resolve(&self, name: &str) -> Option<ActionId> {
         self.by_id.get(name).copied()
     }
@@ -164,13 +158,8 @@ pub fn try_merge(sources: &[Source]) -> Result<Registry, MergeError> {
     let mut rows: Vec<Action> = Vec::with_capacity(count);
     let mut by_id: HashMap<String, ActionId> = HashMap::with_capacity(count);
     // Where each name came from, kept only so a duplicate can name both sides.
-    //
-    // **Borrowed, not owned.** Every string it needs already lives in `sources`
-    // and outlives this call, so owning them would allocate twice per row --
-    // once for the name and once for the source name, the second of which is
-    // the same string copied for every row a source contributes -- to serve a
-    // path that a correct table never takes. The owned strings are built where
-    // they are actually needed: inside the error.
+    // Borrowed: every string already lives in `sources` and outlives this call,
+    // and the owned copies belong inside the error that needs them.
     let mut origin: HashMap<&str, (&str, usize)> =
         HashMap::with_capacity(count);
 

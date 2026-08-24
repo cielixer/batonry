@@ -1,15 +1,8 @@
 //! Mechanism for a command system: names, chords, keymap rows, and an index.
 //!
-//! **This crate owns Baton's action catalog, and it is not an extraction
-//! candidate.** An earlier shape pushed the rows out to whatever drove it, on
-//! the theory that this crate would be published on its own; that plan was
-//! withdrawn, so the tables came back in ([`ACTIONS`], [`DEFAULT_KEYMAP`]) and
-//! there is one place to look instead of a wiring step.
-//!
-//! What stayed from that shape is worth keeping: it still does not depend on
-//! `iced`, still has no notion of a pane or a host, and still names no platform.
-//! Those are boundaries the tables do not need to cross, not preparation for a
-//! move.
+//! The catalog lives here ([`ACTIONS`], [`DEFAULT_KEYMAP`]): one place to look,
+//! and a compile-time constant rather than a wiring step. Nothing in the crate
+//! depends on a UI toolkit, knows what a pane or a host is, or names a platform.
 //!
 //! What it provides:
 //!
@@ -64,14 +57,15 @@
 //!   keystroke becomes an action or **falls through** to whatever else is
 //!   listening. Not "is this action greyed out". Opaque here.
 //!
-//! The key vocabulary itself is [`keyboard_types`]: the W3C UI Events set, 216
-//! physical codes and a modifier bitflag. Not a windowing library, so this crate
-//! stays free of one -- and not ours to maintain, so every key is reachable
-//! without a table here going stale.
 //! - **[`Registry`]** -- rows plus a name index, built once from each
 //!   [`Source`].
 //! - **[`Source`]** -- one table with a name, so a duplicate can say *which two*
 //!   collided. Borrowed for the built-in table, owned for a loaded one.
+//!
+//! The key vocabulary itself is [`keyboard_types`]: the W3C UI Events set, 216
+//! physical codes and a modifier bitflag. Not a windowing library, so this crate
+//! stays free of one -- and not ours to maintain, so every key is reachable
+//! without a table here going stale.
 //!
 //! # Style
 //!

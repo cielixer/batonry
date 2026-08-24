@@ -18,7 +18,7 @@ use std::borrow::Cow;
 use std::collections::HashSet;
 
 use baton_action::{
-    ACTIONS, Action, ArgKind, BUILT_IN, KEY_ONLY, MergeError, PALETTE, Source,
+    ACTIONS, Action, ArgShape, BUILT_IN, KEY_ONLY, MergeError, PALETTE, Source,
     reachable_from, try_merge,
 };
 
@@ -75,7 +75,7 @@ fn every_action_has_a_label_and_stage_one_takes_no_arguments() {
         assert!(!a.label.is_empty(), "{} has no label", a.id);
         assert_eq!(
             a.arg,
-            ArgKind::None,
+            ArgShape::None,
             "{} takes an argument, but nothing in stage 1 can supply one",
             a.id
         );
@@ -175,13 +175,13 @@ fn a_runtime_table_merges_beside_the_built_in_one() {
                 id: Cow::Owned(String::from("plugin.greet")),
                 label: Cow::Owned(String::from("Say Hello")),
                 channels: PALETTE,
-                arg: ArgKind::None,
+                arg: ArgShape::None,
             },
             Action {
                 id: Cow::Owned(String::from("host.edit")),
                 label: Cow::Owned(String::from("Edit Host…")),
                 channels: PALETTE,
-                arg: ArgKind::HostTab,
+                arg: ArgShape::HostTab,
             },
         ]),
     };
@@ -196,7 +196,7 @@ fn a_runtime_table_merges_beside_the_built_in_one() {
     let greet = r.resolve("plugin.greet").expect("the loaded row resolves");
     assert_eq!(r.get(greet).unwrap().label, "Say Hello");
     let edit = r.resolve("host.edit").unwrap();
-    assert_eq!(r.get(edit).unwrap().arg, ArgKind::HostTab);
+    assert_eq!(r.get(edit).unwrap().arg, ArgShape::HostTab);
 }
 
 /// **Merging adds; it never redefines.** A loaded table cannot take over a
@@ -210,7 +210,7 @@ fn a_runtime_table_cannot_redefine_a_built_in_action() {
             id: Cow::Borrowed("term.copy"),
             label: Cow::Owned(String::from("Copy, but different")),
             channels: PALETTE,
-            arg: ArgKind::None,
+            arg: ArgShape::None,
         }]),
     };
     let err = try_merge(&[BUILT_IN, hostile])
@@ -237,13 +237,13 @@ fn a_duplicate_names_both_sources_and_both_positions() {
                 id: Cow::Borrowed("pane.close"),
                 label: Cow::Borrowed("Close Pane"),
                 channels: PALETTE,
-                arg: ArgKind::Pane,
+                arg: ArgShape::Pane,
             },
             Action {
                 id: Cow::Borrowed("term.copy"),
                 label: Cow::Borrowed("Copy (again)"),
                 channels: PALETTE,
-                arg: ArgKind::None,
+                arg: ArgShape::None,
             },
         ]),
     };
@@ -285,13 +285,13 @@ fn a_duplicate_inside_one_source_is_also_rejected() {
                 id: Cow::Borrowed("app.quit"),
                 label: Cow::Borrowed("Quit"),
                 channels: PALETTE,
-                arg: ArgKind::None,
+                arg: ArgShape::None,
             },
             Action {
                 id: Cow::Borrowed("app.quit"),
                 label: Cow::Borrowed("Quit, pasted"),
                 channels: PALETTE,
-                arg: ArgKind::None,
+                arg: ArgShape::None,
             },
         ]),
     };

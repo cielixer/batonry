@@ -66,10 +66,11 @@ pub const fn union(set: Channels, extra: Channels) -> Channels {
 
 /// The shape of the argument an action expects.
 ///
-/// The *kind*, not the type: the value travels beside the id when the action is
-/// issued, so the table only has to say what shape to expect.
+/// A shape and not a type, because this crate does not depend on `baton-core`
+/// and so cannot name what a host or a pane actually is. The value travels
+/// beside the id when the action is issued; the table only says what to expect.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub enum ArgKind {
+pub enum ArgShape {
     /// Takes no argument. Everything stage 1 implements is this.
     #[default]
     None,
@@ -90,7 +91,7 @@ pub enum ArgKind {
     /// A host **and an optional tab**, which is `host.edit{id,tab?}`.
     ///
     /// Here because a flat enum of single ids cannot express it, and an action
-    /// taking a host alone would be [`ArgKind::Host`].
+    /// taking a host alone would be [`ArgShape::Host`].
     HostTab,
 }
 
@@ -111,7 +112,7 @@ pub struct Action {
     /// Which non-key surfaces can invoke this.
     pub channels: Channels,
     /// The argument shape this expects.
-    pub arg: ArgKind,
+    pub arg: ArgShape,
 }
 
 /// One way to reach one action.

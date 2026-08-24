@@ -13,7 +13,7 @@
 use std::borrow::Cow;
 
 use crate::action::{
-    Action, ArgKind, Binding, Channels, KEY_ONLY, MENU, PALETTE, union,
+    Action, ArgShape, Binding, Channels, KEY_ONLY, MENU, PALETTE, union,
 };
 
 use crate::registry::Source;
@@ -43,7 +43,7 @@ const fn act(
         id: Cow::Borrowed(id),
         label: Cow::Borrowed(label),
         channels,
-        arg: ArgKind::None,
+        arg: ArgShape::None,
     }
 }
 

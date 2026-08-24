@@ -32,8 +32,9 @@
 //!   is whatever the keymap says and changes when someone rebinds. The empty set
 //!   is [`KEY_ONLY`], and it is a value to build a row with rather than one to
 //!   ask about: every set contains it.
-//! - **[`ArgKind`]** -- the *shape* of the argument an action expects, not the
-//!   type. The value travels beside the id when the action is issued.
+//! - **[`ArgShape`]** -- what an action expects beside its id: a host, a pane, a
+//!   tab position. A shape and not a type, because this crate cannot name
+//!   `baton-core`'s types without depending on it.
 //! - **Id** -- the permanent name, by convention `<domain>.<verb>[.<variant>]`
 //!   as in `host.connect`. Configuration joins on it, so **it never changes**.
 //! - **[`ActionId`]** -- **not** the above, despite reading like it. A name is a
@@ -72,7 +73,7 @@
 //! - **[`Source`]** -- one table with a name, so a duplicate can say *which two*
 //!   collided. Borrowed for the built-in table, owned for a loaded one.
 //!
-//! # Shape
+//! # Style
 //!
 //! Plain data with free functions over it, and methods only where a type owns
 //! state and an invariant -- which here is [`Registry`] alone. No trait objects
@@ -84,7 +85,7 @@ mod keystroke;
 mod registry;
 
 pub use action::{
-    Action, ArgKind, Binding, CLICK, Channels, DRAG, KEY_ONLY, MENU, PALETTE,
+    Action, ArgShape, Binding, CLICK, Channels, DRAG, KEY_ONLY, MENU, PALETTE,
     reachable_from, union,
 };
 pub use catalog::{ACTIONS, BUILT_IN, DEFAULT_KEYMAP};

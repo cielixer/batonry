@@ -1,7 +1,9 @@
 # Review checklist
 
 The single source of truth for what a review checks, how findings are graded,
-and when a change passes. `CLAUDE.md` is the authority for the rules; this file
+and when a change passes. `CLAUDE.md` is the authority for the rules -- and when
+the diff touches `crates/baton-term`, `crates/baton-term/CLAUDE.md` carries that
+crate's own rules on top of it. This file
 says how to apply them.
 
 ## Severity

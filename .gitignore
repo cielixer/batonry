@@ -7,7 +7,7 @@
 # in GitHub issues and the project board, and keeping a second copy in the repo
 # means two sources of truth that drift apart.
 /docs/
-/CLAUDE.md
+CLAUDE.md
 
 # Local scratch
 /_to_delete/

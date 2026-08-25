@@ -110,5 +110,5 @@ const fn bind(
 /// This crate's contribution to the boot-time merge.
 pub const BUILT_IN: Source = Source {
     name: Cow::Borrowed("baton-action"),
-    rows: Cow::Borrowed(ACTIONS),
+    actions: Cow::Borrowed(ACTIONS),
 };

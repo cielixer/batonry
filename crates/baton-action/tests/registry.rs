@@ -82,6 +82,43 @@ fn every_action_has_a_label_and_stage_one_takes_no_arguments() {
     }
 }
 
+/// `reachable` is the palette, and what it hands back is dispatchable.
+///
+/// The id matters as much as the row. A palette entry has to turn into a message,
+/// and the index accessor is private, so an iterator yielding `&Action` alone
+/// would force a caller to `resolve` the id string it had just read.
+#[test]
+fn reachable_carries_ids_a_caller_can_dispatch() {
+    let r = try_merge(&[BUILT_IN]).expect("the built-in table merges");
+
+    let by_hand: Vec<&str> = ACTIONS
+        .iter()
+        .filter(|a| reachable_from(a.channels, PALETTE))
+        .map(|a| a.id.as_ref())
+        .collect();
+    let by_registry: Vec<&str> =
+        r.reachable(PALETTE).map(|(_, a)| a.id.as_ref()).collect();
+    assert_eq!(by_registry, by_hand, "reachable() is not the same filter");
+    assert!(!by_hand.is_empty(), "the fixture would prove nothing");
+
+    // Every id it yields addresses the row it came with.
+    for (id, action) in r.reachable(PALETTE) {
+        assert_eq!(r.get(id), Some(action), "{} yielded a stale id", action.id);
+        assert_eq!(r.resolve(&action.id), Some(id));
+    }
+}
+
+/// `iter` walks every action once, in contribution order, ids included.
+#[test]
+fn iter_is_the_whole_table_in_order() {
+    let r = try_merge(&[BUILT_IN]).expect("the built-in table merges");
+    assert_eq!(r.iter().count(), ACTIONS.len());
+    for ((id, action), expected) in r.iter().zip(ACTIONS) {
+        assert_eq!(action, expected);
+        assert_eq!(r.get(id), Some(expected));
+    }
+}
+
 /// The palette shows what carries `PALETTE`. If every action carried it, or none
 /// did, the field would be decoration.
 #[test]
@@ -144,8 +181,8 @@ fn id_grammar_is_only_what_can_be_checked() {
 #[test]
 fn the_built_in_source_registers_and_indexes_every_row() {
     let r = try_merge(&[BUILT_IN]).expect("the built-in table merges");
-    assert_eq!(r.len(), ACTIONS.len());
-    assert!(!r.is_empty());
+    assert_eq!(r.count(), ACTIONS.len());
+    assert!(r.count() > 0);
 
     // Ids are handed out in contribution order. Asserting that through the
     // public surface rather than through the integer: the id a name resolves to
@@ -156,7 +193,7 @@ fn the_built_in_source_registers_and_indexes_every_row() {
             .resolve(&row.id)
             .unwrap_or_else(|| panic!("{} did not resolve", row.id));
         assert_eq!(r.get(id).unwrap(), row);
-        assert_eq!(&r.rows()[position], row);
+        assert_eq!(r.iter().nth(position).map(|(_, a)| a), Some(row));
     }
     assert!(r.resolve("nope.missing").is_none());
 }
@@ -169,7 +206,7 @@ fn the_built_in_source_registers_and_indexes_every_row() {
 fn a_runtime_table_merges_beside_the_built_in_one() {
     let loaded = Source {
         name: Cow::Owned(String::from("keymap.toml")),
-        rows: Cow::Owned(vec![
+        actions: Cow::Owned(vec![
             Action {
                 id: Cow::Owned(String::from("plugin.greet")),
                 label: Cow::Owned(String::from("Say Hello")),
@@ -186,11 +223,11 @@ fn a_runtime_table_merges_beside_the_built_in_one() {
     };
 
     let r = try_merge(&[BUILT_IN, loaded]).expect("disjoint sources merge");
-    assert_eq!(r.len(), ACTIONS.len() + 2);
+    assert_eq!(r.count(), ACTIONS.len() + 2);
 
     // Built-in rows keep their positions, so an index issued before the loaded
     // table existed still means the same thing.
-    assert_eq!(r.rows()[0].id, ACTIONS[0].id);
+    assert_eq!(r.iter().next().unwrap().1.id, ACTIONS[0].id);
 
     let greet = r.resolve("plugin.greet").expect("the loaded row resolves");
     assert_eq!(r.get(greet).unwrap().label, "Say Hello");
@@ -205,7 +242,7 @@ fn a_runtime_table_merges_beside_the_built_in_one() {
 fn a_runtime_table_cannot_redefine_a_built_in_action() {
     let hostile = Source {
         name: Cow::Owned(String::from("keymap.toml")),
-        rows: Cow::Owned(vec![Action {
+        actions: Cow::Owned(vec![Action {
             id: Cow::Borrowed("term.copy"),
             label: Cow::Owned(String::from("Copy, but different")),
             channels: PALETTE,
@@ -231,7 +268,7 @@ fn a_duplicate_names_both_sources_and_both_positions() {
     // colliding source so the positions differ and cannot be confused.
     let other = Source {
         name: Cow::Borrowed("other-crate"),
-        rows: Cow::Owned(vec![
+        actions: Cow::Owned(vec![
             Action {
                 id: Cow::Borrowed("pane.close"),
                 label: Cow::Borrowed("Close Pane"),
@@ -279,7 +316,7 @@ fn a_duplicate_names_both_sources_and_both_positions() {
 fn a_duplicate_inside_one_source_is_also_rejected() {
     let twice = Source {
         name: Cow::Borrowed("self-colliding"),
-        rows: Cow::Owned(vec![
+        actions: Cow::Owned(vec![
             Action {
                 id: Cow::Borrowed("app.quit"),
                 label: Cow::Borrowed("Quit"),
@@ -309,7 +346,7 @@ fn a_duplicate_inside_one_source_is_also_rejected() {
 #[test]
 fn an_empty_source_list_produces_an_empty_registry() {
     let r = try_merge(&[]).unwrap();
-    assert!(r.is_empty());
+    assert!(r.count() == 0);
     assert!(r.resolve("anything").is_none());
 }
 

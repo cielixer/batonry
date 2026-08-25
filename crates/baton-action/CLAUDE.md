@@ -37,13 +37,15 @@ pub const DEFAULT_KEYMAP: &[Binding];
 pub const BUILT_IN: Source;
 
 // baton-action/src/registry.rs
-pub struct Source { pub name: Cow<'static, str>, pub rows: Cow<'static, [Action]> }
+pub struct Source { pub name: Cow<'static, str>, pub actions: Cow<'static, [Action]> }
 pub fn try_merge(sources: &[Source]) -> Result<Registry, MergeError>;
 pub struct ActionId(u16);          // issued by the registry. An index, so lookup is O(1)
 impl Registry {
     pub fn resolve(&self, name: &str) -> Option<ActionId>;   // permanent name -> issued index
     pub fn get(&self, id: ActionId) -> Option<&Action>;
-    pub fn rows(&self) -> &[Action];
+    pub fn iter(&self) -> impl Iterator<Item = (ActionId, &Action)>;
+    pub fn reachable(&self, surface: Channels) -> impl Iterator<Item = (ActionId, &Action)>;
+    pub fn count(&self) -> usize;
 }
 // The accessor that extracts the index is a free function, and **private** (#79). A caller
 // that can compute the integer can build an index the registry never issued.
@@ -63,7 +65,8 @@ impl Registry {
 
 **`when` guards the binding, not the action.** The order of judgement is *"if it is in the keymap and `when` passes, publish the action; everything else goes through the input router to the PTY"*, so `when` decides **whether the keystroke is ours in the first place.** It is conditional interception, not a disabled action. `term.copy` is the example: with a selection it copies, and without one `⌘C` **goes to the PTY.** One action may carry several bindings, or none.
 
-- **Every action is registered.** The palette is a UI that searches this registry for rows whose `channels` include `PALETTE`. **If the mouse can do it and the palette cannot, that is a bug.**
+- **The registry hands out `(ActionId, &Action)` and never its slice** (#80). Every list a surface draws becomes a message, so an accessor that returns `&Action` alone forces the caller to `resolve` an id string it just read -- the index accessor being private is what makes that unavoidable. `iter` is the whole table and `reachable(surface)` is the filter a palette *is*; there is no `rows()`, `len()` or `is_empty()`.
+- **Every action is registered.** The palette is `reachable(PALETTE)` and nothing else. **If the mouse can do it and the palette cannot, that is a bug.**
   **Being in the registry and being in the palette are still different things.** A host-key modal's confirm and cancel go through the registry (A10: a click does not call a function directly) but do not appear in the palette. They are not the kind of thing a person hunts for, and greying them out fills the list with noise. The dividing line is **"should a user be able to invoke this from anywhere?"**
 - **Keep `when` clauses minimal.** Context identifiers and **`!`, `&&`, `||`, `==`** only. Warp does this in 124 lines and VSCode in 2,183; **we are on Warp's side.** The target is under 200 lines.
   **The operators are symbols, not words (`and`, `or`, `not`).** This is a file a user writes by hand, and the keymap syntax people already know (VSCode and Zed) uses `!` and `&&`.

@@ -12,7 +12,7 @@
 //! - [`Binding`] -- a keystroke, the name of what it reaches, and an opaque
 //!   condition. The rows are yours.
 //! - [`Registry`], [`Source`] and [`try_merge`] -- stable indices for a set of
-//!   named things, contributed by several crates, with duplicates refused
+//!   named things, contributed by several sources, with duplicates refused
 //!   loudly.
 //!
 //! # Vocabulary
@@ -57,10 +57,12 @@
 //!   keystroke becomes an action or **falls through** to whatever else is
 //!   listening. Not "is this action greyed out". Opaque here.
 //!
-//! - **[`Registry`]** -- rows plus a name index, built once from each
-//!   [`Source`].
-//! - **[`Source`]** -- one table with a name, so a duplicate can say *which two*
-//!   collided. Borrowed for the built-in table, owned for a loaded one.
+//! - **[`Registry`]** -- the merged actions plus a name index, built once from
+//!   each [`Source`]. It hands out `(ActionId, &Action)` and never the slice, so
+//!   a caller always has something it can dispatch.
+//! - **[`Source`]** -- one contribution with a name, so a duplicate can say
+//!   *which two* collided. Borrowed for the built-in table, owned for a loaded
+//!   one.
 //!
 //! The key vocabulary itself is [`keyboard_types`]: the W3C UI Events set, 216
 //! physical codes and a modifier bitflag. Not a windowing library, so this crate

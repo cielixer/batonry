@@ -4,7 +4,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
 
-use crate::action::Action;
+use crate::action::{Action, Channels, reachable_from};
 
 /// A registry-issued index.
 ///
@@ -30,10 +30,10 @@ const fn index(id: ActionId) -> usize {
     id.0 as usize
 }
 
-/// A named group of rows.
+/// One contribution to the action table, with a name.
 ///
-/// `rows` is a `Cow`, which is what lets a table that arrives at runtime be the
-/// same kind of thing as the built-in one: the constant borrows a slice, a
+/// `actions` is a `Cow`, which is what lets a table that arrives at runtime be
+/// the same kind of thing as the built-in one: the constant borrows a slice, a
 /// loaded table owns a `Vec`, and the merge does not care which it is given.
 ///
 /// The name is not decoration. With anonymous slices a duplicate could only be
@@ -42,69 +42,87 @@ const fn index(id: ActionId) -> usize {
 pub struct Source {
     /// Used in diagnostics. Usually a crate name, or the file a table came from.
     pub name: Cow<'static, str>,
-    /// The rows this source contributes.
-    pub rows: Cow<'static, [Action]>,
+    /// What this source contributes.
+    pub actions: Cow<'static, [Action]>,
 }
 
-/// Rows in contribution order, plus a name index.
+/// The merged actions in contribution order, plus a name index.
 ///
-/// Rows stay contiguous so iteration is a walk and an [`ActionId`] is an index.
+/// They stay contiguous so iteration is a walk and an [`ActionId`] is an index.
 /// The one type here with methods, because it is the one that owns an invariant:
 /// the map and the slice have to agree.
 #[derive(Debug, Default)]
 pub struct Registry {
-    rows: Vec<Action>,
+    actions: Vec<Action>,
     by_id: HashMap<String, ActionId>,
 }
 
 impl Registry {
-    /// The row an issued index stands for. A bounds check.
+    /// The action an issued index stands for. A bounds check.
     pub fn get(&self, id: ActionId) -> Option<&Action> {
-        self.rows.get(index(id))
+        self.actions.get(index(id))
     }
 
-    /// Resolves a permanent name to an issued index. **Not a scan of the row
-    /// slice.**
+    /// Resolves a permanent name to an issued index. **Not a scan.**
     pub fn resolve(&self, name: &str) -> Option<ActionId> {
         self.by_id.get(name).copied()
     }
 
-    /// Every row, in contribution order.
-    pub fn rows(&self) -> &[Action] {
-        &self.rows
+    /// Every action in contribution order, each with the id it was issued.
+    ///
+    /// **The id comes with it, and that is the point.** Handing out the slice
+    /// alone would leave a caller holding an [`Action`] and no way to name it,
+    /// since the index accessor is private -- it would have to [`resolve`] the
+    /// id string it had just walked past.
+    ///
+    /// [`resolve`]: Registry::resolve
+    pub fn iter(&self) -> impl Iterator<Item = (ActionId, &Action)> {
+        self.actions
+            .iter()
+            .enumerate()
+            .map(|(i, a)| (ActionId(i as u16), a))
     }
 
-    /// How many rows are registered.
-    pub fn len(&self) -> usize {
-        self.rows.len()
+    /// The actions a surface can invoke, each with its id.
+    ///
+    /// What a palette is: this filter over the registry, and nothing else. It is
+    /// here rather than at the call site because [`Channels`] arithmetic has one
+    /// hazard -- the empty set is contained by everything -- and one place to get
+    /// it right is better than one per surface.
+    pub fn reachable(
+        &self,
+        surface: Channels,
+    ) -> impl Iterator<Item = (ActionId, &Action)> {
+        self.iter()
+            .filter(move |(_, a)| reachable_from(a.channels, surface))
     }
 
-    /// Whether nothing is registered.
-    pub fn is_empty(&self) -> bool {
-        self.rows.is_empty()
+    /// How many actions are registered.
+    pub fn count(&self) -> usize {
+        self.actions.len()
     }
 }
 
 /// Why a merge failed.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum MergeError {
-    /// Two rows claimed one name. **Both sides are named**, because "there is a
-    /// duplicate somewhere" is not an actionable message.
+    /// Two actions claimed one name. **Both sides are named**, because "there
+    /// is a duplicate somewhere" is not an actionable message.
     DuplicateId {
         /// The name claimed twice.
         id: String,
         /// The source that claimed it first.
         first_source: String,
-        /// Zero-based row position within `first_source`.
+        /// Zero-based position within `first_source`.
         first_position: usize,
         /// The source that claimed it again.
         second_source: String,
-        /// Zero-based row position within `second_source`.
+        /// Zero-based position within `second_source`.
         second_position: usize,
     },
-    /// More rows than an [`ActionId`] can address.
-    TooManyRows {
-        /// How many rows were offered.
+    /// More actions than an [`ActionId`] can address.
+    TooManyActions {
+        /// How many were offered.
         count: usize,
     },
 }
@@ -124,7 +142,7 @@ impl fmt::Display for MergeError {
                  {first_position} collides with {second_source} index \
                  {second_position}",
             ),
-            Self::TooManyRows { count } => write!(
+            Self::TooManyActions { count } => write!(
                 f,
                 "cannot register {count} actions: an ActionId is a u16, so {} \
                  is the ceiling",
@@ -136,26 +154,26 @@ impl fmt::Display for MergeError {
 
 impl std::error::Error for MergeError {}
 
-/// How many rows an [`ActionId`] can address: every `u16` is a valid index.
+/// How many actions an [`ActionId`] can address: every `u16` is a valid index.
 const CEILING: usize = u16::MAX as usize + 1;
 
 /// Merges sources into one registry, in the order given.
 ///
-/// A duplicate is rejected rather than letting one row silently overwrite the
-/// other -- which is what a bare `HashMap::insert` would do, and which shows up
-/// much later as an action that quietly stopped existing.
+/// A duplicate is rejected rather than letting one silently overwrite the other
+/// -- which is what a bare `HashMap::insert` would do, and which shows up much
+/// later as an action that quietly stopped existing.
 ///
 /// **Rejecting is the whole policy: there is no last-one-wins.** A table loaded
 /// at runtime adds actions; it does not redefine one that already exists. Giving
 /// it that power would mean a file could silently change what a built-in action
 /// does, and the palette would still show the built-in label.
 pub fn try_merge(sources: &[Source]) -> Result<Registry, MergeError> {
-    let count = sources.iter().map(|s| s.rows.len()).sum();
+    let count = sources.iter().map(|s| s.actions.len()).sum();
     if count > CEILING {
-        return Err(MergeError::TooManyRows { count });
+        return Err(MergeError::TooManyActions { count });
     }
 
-    let mut rows: Vec<Action> = Vec::with_capacity(count);
+    let mut actions: Vec<Action> = Vec::with_capacity(count);
     let mut by_id: HashMap<String, ActionId> = HashMap::with_capacity(count);
     // Where each name came from, kept only so a duplicate can name both sides.
     // Borrowed: every string already lives in `sources` and outlives this call,
@@ -164,7 +182,7 @@ pub fn try_merge(sources: &[Source]) -> Result<Registry, MergeError> {
         HashMap::with_capacity(count);
 
     for source in sources {
-        for (position, row) in source.rows.iter().enumerate() {
+        for (position, row) in source.actions.iter().enumerate() {
             if let Some((first_source, first_position)) =
                 origin.get(row.id.as_ref())
             {
@@ -180,13 +198,13 @@ pub fn try_merge(sources: &[Source]) -> Result<Registry, MergeError> {
             // The ceiling check above makes this conversion total. It is a
             // conversion rather than an `as` cast so that loosening that check
             // cannot silently start truncating.
-            let next = u16::try_from(rows.len())
-                .map_err(|_| MergeError::TooManyRows { count })?;
+            let next = u16::try_from(actions.len())
+                .map_err(|_| MergeError::TooManyActions { count })?;
             by_id.insert(row.id.to_string(), ActionId(next));
             origin.insert(row.id.as_ref(), (source.name.as_ref(), position));
-            rows.push(row.clone());
+            actions.push(row.clone());
         }
     }
 
-    Ok(Registry { rows, by_id })
+    Ok(Registry { actions, by_id })
 }

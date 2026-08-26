@@ -37,9 +37,18 @@ const fn index(id: ActionId) -> usize {
 ///
 /// The name is not decoration. With anonymous slices a duplicate could only be
 /// reported as "an insert failed", which tells whoever hits it nothing.
+///
+/// **It is not a namespace.** Ids are global and flat, and the merge keys on the
+/// id exactly as written, so `term.copy` from a loaded file collides with
+/// `term.copy` from here. That collision is the point: an id is what a keymap
+/// file and a saved setting persist against, so prefixing it with whichever
+/// source happened to supply it would break every one of them the moment an
+/// action moved between crates. Something that wants its own space spells it
+/// into the id -- `myplugin.git.commit`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Source {
-    /// Used in diagnostics. Usually a crate name, or the file a table came from.
+    /// Used in diagnostics, and nowhere else. Usually a crate name, or the file
+    /// a table came from.
     pub name: Cow<'static, str>,
     /// What this source contributes.
     pub actions: Cow<'static, [Action]>,

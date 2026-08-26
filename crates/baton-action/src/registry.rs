@@ -2,6 +2,7 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::fmt;
 
 use crate::action::{Action, Channels, reachable_from};
 
@@ -111,6 +112,26 @@ impl Registry {
     }
 }
 
+/// One side of a duplicate: which source, what it calls itself, and where.
+///
+/// The source's position is what disambiguates, since [`Source::name`] is a
+/// label and not a key -- two of them may be identical.
+struct Claim<'a> {
+    source: usize,
+    name: &'a str,
+    position: usize,
+}
+
+impl fmt::Display for Claim<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "source {} ({}) index {}",
+            self.source, self.name, self.position
+        )
+    }
+}
+
 /// How many actions an [`ActionId`] can address: every `u16` is a valid index.
 const CEILING: usize = u16::MAX as usize + 1;
 
@@ -123,6 +144,13 @@ const CEILING: usize = u16::MAX as usize + 1;
 /// keymap file starts contributing rows, its loader is where they get validated,
 /// and that is the better place: it can name a line rather than a source.
 ///
+/// **A row's *content* is not validated here.** An empty id, an empty label, an
+/// id that breaks the naming convention: all merge cleanly. Today every source
+/// is a compile-time constant and tests cover the built-in table directly, so
+/// nothing unchecked can reach this. When a keymap file starts contributing
+/// rows, validating them is its loader's job -- which is also where a line
+/// number is available. Do not answer that by growing this function.
+///
 /// **There is no last-one-wins.** A later source adds actions; it does not
 /// redefine one that exists. An `Action` row is a description and not behaviour
 /// -- the behaviour is whatever matches on the resolved [`ActionId`] -- so
@@ -133,20 +161,26 @@ pub fn merge(sources: &[Source]) -> Registry {
     let count = sources.iter().map(|s| s.actions.len()).sum();
     let mut actions: Vec<Action> = Vec::with_capacity(count);
     let mut by_id: HashMap<String, ActionId> = HashMap::with_capacity(count);
-    // Where each name came from, kept only so a duplicate can name both sides.
+    // Where each id came from, kept only so a duplicate can name both sides.
     // Borrowed: every string already lives in `sources` and outlives this call.
-    let mut origin: HashMap<&str, (&str, usize)> =
-        HashMap::with_capacity(count);
+    //
+    // The source's position travels with its name because the name does not
+    // have to be unique. Two files may both call themselves `keymap.toml`, and
+    // without the position their collision would read exactly like one source
+    // colliding with itself.
+    let mut origin: HashMap<&str, Claim<'_>> = HashMap::with_capacity(count);
 
-    for source in sources {
+    for (nth, source) in sources.iter().enumerate() {
         for (position, row) in source.actions.iter().enumerate() {
-            if let Some((first_source, first_position)) =
-                origin.get(row.id.as_ref())
-            {
+            if let Some(first) = origin.get(row.id.as_ref()) {
                 panic!(
-                    "duplicate action id {:?}: {} index {} collides with {} \
-                     index {}",
-                    row.id, first_source, first_position, source.name, position
+                    "duplicate action id {:?}: {first} collides with {}",
+                    row.id,
+                    Claim {
+                        source: nth,
+                        name: source.name.as_ref(),
+                        position
+                    }
                 );
             }
 
@@ -159,7 +193,14 @@ pub fn merge(sources: &[Source]) -> Registry {
                 )
             });
             by_id.insert(row.id.to_string(), ActionId(next));
-            origin.insert(row.id.as_ref(), (source.name.as_ref(), position));
+            origin.insert(
+                row.id.as_ref(),
+                Claim {
+                    source: nth,
+                    name: source.name.as_ref(),
+                    position,
+                },
+            );
             actions.push(row.clone());
         }
     }

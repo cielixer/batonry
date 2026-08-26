@@ -284,16 +284,58 @@ fn a_duplicate_names_both_sources_and_both_positions() {
         .downcast_ref::<String>()
         .expect("the panic carries a formatted message")
         .clone();
-    for needle in ["term.copy", "baton-action", "other-crate", "6", "1"] {
+    for needle in [
+        "term.copy",
+        "source 0 (baton-action) index 6",
+        "source 1 (other-crate) index 1",
+    ] {
         assert!(text.contains(needle), "message omits {needle:?}: {text}");
     }
+}
+
+/// A source's name is a label, not a key, so two of them may be identical. The
+/// message has to stay readable when they are -- otherwise a collision between
+/// two files both called `keymap.toml` reads exactly like one file colliding
+/// with itself.
+#[test]
+fn two_sources_sharing_a_name_are_still_told_apart() {
+    let one = Source {
+        name: Cow::Borrowed("keymap.toml"),
+        actions: Cow::Owned(vec![Action {
+            id: Cow::Borrowed("plugin.greet"),
+            label: Cow::Borrowed("Greet"),
+            channels: PALETTE,
+            arg: ArgShape::None,
+        }]),
+    };
+    let two = Source {
+        name: Cow::Borrowed("keymap.toml"),
+        actions: Cow::Owned(vec![Action {
+            id: Cow::Borrowed("plugin.greet"),
+            label: Cow::Borrowed("Greet, again"),
+            channels: PALETTE,
+            arg: ArgShape::None,
+        }]),
+    };
+
+    let payload = std::panic::catch_unwind(|| merge(&[one, two]))
+        .expect_err("two sources claiming one id must not merge");
+    let text = payload
+        .downcast_ref::<String>()
+        .expect("the panic carries a formatted message")
+        .clone();
+    assert!(
+        text.contains("source 0 (keymap.toml) index 0")
+            && text.contains("source 1 (keymap.toml) index 0"),
+        "the two sources are indistinguishable: {text}"
+    );
 }
 
 /// A duplicate **within one source** is the same failure and the likelier one:
 /// a copy-pasted row in a growing table.
 #[test]
-#[should_panic(expected = "self-colliding index 0 collides with \
-                           self-colliding index 1")]
+#[should_panic(expected = "source 0 (self-colliding) index 0 collides with \
+                           source 0 (self-colliding) index 1")]
 fn a_duplicate_inside_one_source_is_also_rejected() {
     let twice = Source {
         name: Cow::Borrowed("self-colliding"),

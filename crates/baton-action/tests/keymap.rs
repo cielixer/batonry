@@ -6,11 +6,11 @@
 
 use std::collections::HashSet;
 
-use baton_action::{ACTIONS, BUILT_IN, DEFAULT_KEYMAP, Keystroke, try_merge};
+use baton_action::{ACTIONS, BUILT_IN, DEFAULT_KEYMAP, Keystroke, merge};
 
 #[test]
 fn every_binding_names_an_action_that_exists() {
-    let registry = try_merge(&[BUILT_IN]).unwrap();
+    let registry = merge(&[BUILT_IN]);
     for b in DEFAULT_KEYMAP {
         assert!(
             registry.resolve(&b.action).is_some(),

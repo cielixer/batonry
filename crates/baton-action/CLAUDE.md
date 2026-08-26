@@ -38,7 +38,7 @@ pub const BUILT_IN: Source;
 
 // baton-action/src/registry.rs
 pub struct Source { pub name: Cow<'static, str>, pub actions: Cow<'static, [Action]> }
-pub fn try_merge(sources: &[Source]) -> Result<Registry, MergeError>;
+pub fn merge(sources: &[Source]) -> Registry;   // panics on a duplicate id (#82)
 pub struct ActionId(u16);          // issued by the registry. An index, so lookup is O(1)
 impl Registry {
     pub fn resolve(&self, name: &str) -> Option<ActionId>;   // permanent name -> issued index
@@ -59,9 +59,11 @@ impl Registry {
 
 **Use `Cow<'static, str>`, not `&'static str`.** The strings in a user keymap (TOML) are owned at runtime, so `&'static` would force a leak or interning. `Cow::Borrowed` is const-constructible, so the built-in keymap stays a constant.
 
-**M1 includes user keymaps** (`ux/interactions.md` §8-4). **Anything outside the compile-time tables arrives as TOML, and merging only adds: it never redefines** (#78). A rebind is one more `Binding` row and a new action is one more `Action` row. **A duplicate id is an error, not last-one-wins.** If a file could quietly change what a built-in action does, the palette would still be showing the built-in label.
+**M1 includes user keymaps** (`ux/interactions.md` §8-4). **Anything outside the compile-time tables arrives as TOML, and merging only adds: it never redefines** (#78). A rebind is one more `Binding` row and a new action is one more `Action` row.
 
-**The merge returns a `Result`. This is not a test condition.** Taking `Source { name, rows }` is what lets a duplicate-id error **name both sources and both positions.** An anonymous slice cannot say that.
+**There is no last-one-wins, and the reason is that an `Action` row is a description rather than behaviour** (#81). The behaviour is whatever matches on the resolved `ActionId`, so overwriting a row could not change what an action does -- only what it claims to do. A palette entry that copies while calling itself something else is worse than a refusal. What a user actually wants to override is a **binding**, and that is already a pure add.
+
+**A duplicate id panics; it is not a `Result`** (#82). An id is unique, and every source is a compile-time constant, so two rows claiming one name is a wrong table rather than a condition a caller could act on. Taking `Source { name, actions }` is what lets the message **name both sources and both positions**, which an anonymous slice could not. When a keymap file starts contributing rows, **its loader validates them** -- that is the better place, because it can name a line.
 
 **`when` guards the binding, not the action.** The order of judgement is *"if it is in the keymap and `when` passes, publish the action; everything else goes through the input router to the PTY"*, so `when` decides **whether the keystroke is ours in the first place.** It is conditional interception, not a disabled action. `term.copy` is the example: with a selection it copies, and without one `⌘C` **goes to the PTY.** One action may carry several bindings, or none.
 

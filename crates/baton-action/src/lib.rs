@@ -11,9 +11,10 @@
 //!   physical positions, not the characters they produce** -- see below.
 //! - [`Binding`] -- a keystroke, the name of what it reaches, and an opaque
 //!   condition. The rows are yours.
-//! - [`Registry`], [`Source`] and [`try_merge`] -- stable indices for a set of
-//!   named things, contributed by several sources, with duplicates refused
-//!   loudly.
+//! - [`Registry`], [`Source`] and [`merge`] -- stable indices for a set of
+//!   named things, contributed by several sources. An id is unique, so a
+//!   duplicate is a wrong table rather than a runtime condition, and [`merge`]
+//!   panics naming both claimants.
 //!
 //! # Vocabulary
 //!
@@ -87,4 +88,4 @@ pub use action::{
 pub use catalog::{ACTIONS, BUILT_IN, DEFAULT_KEYMAP};
 
 pub use keystroke::{Keystroke, KeystrokeError};
-pub use registry::{ActionId, MergeError, Registry, Source, try_merge};
+pub use registry::{ActionId, Registry, Source, merge};

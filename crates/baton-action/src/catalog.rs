@@ -8,7 +8,7 @@
 //!
 //! Both tables are `const`. Anything that has to change without a rebuild --
 //! a rebound key, a row from something loaded -- arrives as a second source and
-//! is merged on top; see [`crate::try_merge`].
+//! is merged on top; see [`crate::merge`].
 //!
 //! **The two tables stay two, and the id they join on is written once.** An
 //! action may carry no binding at all (roughly twenty of the specification's

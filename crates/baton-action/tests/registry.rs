@@ -18,8 +18,8 @@ use std::borrow::Cow;
 use std::collections::HashSet;
 
 use baton_action::{
-    ACTIONS, Action, ArgShape, BUILT_IN, KEY_ONLY, MergeError, PALETTE, Source,
-    reachable_from, try_merge,
+    ACTIONS, Action, ArgShape, BUILT_IN, KEY_ONLY, PALETTE, Source, merge,
+    reachable_from,
 };
 
 /// The ten ids stage 1 implements. Written out rather than derived from
@@ -89,7 +89,7 @@ fn every_action_has_a_label_and_stage_one_takes_no_arguments() {
 /// would force a caller to `resolve` the id string it had just read.
 #[test]
 fn reachable_carries_ids_a_caller_can_dispatch() {
-    let r = try_merge(&[BUILT_IN]).expect("the built-in table merges");
+    let r = merge(&[BUILT_IN]);
 
     let by_hand: Vec<&str> = ACTIONS
         .iter()
@@ -111,7 +111,7 @@ fn reachable_carries_ids_a_caller_can_dispatch() {
 /// `iter` walks every action once, in contribution order, ids included.
 #[test]
 fn iter_is_the_whole_table_in_order() {
-    let r = try_merge(&[BUILT_IN]).expect("the built-in table merges");
+    let r = merge(&[BUILT_IN]);
     assert_eq!(r.iter().count(), ACTIONS.len());
     for ((id, action), expected) in r.iter().zip(ACTIONS) {
         assert_eq!(action, expected);
@@ -180,7 +180,7 @@ fn id_grammar_is_only_what_can_be_checked() {
 
 #[test]
 fn the_built_in_source_registers_and_indexes_every_row() {
-    let r = try_merge(&[BUILT_IN]).expect("the built-in table merges");
+    let r = merge(&[BUILT_IN]);
     assert_eq!(r.count(), ACTIONS.len());
     assert!(r.count() > 0);
 
@@ -222,7 +222,7 @@ fn a_runtime_table_merges_beside_the_built_in_one() {
         ]),
     };
 
-    let r = try_merge(&[BUILT_IN, loaded]).expect("disjoint sources merge");
+    let r = merge(&[BUILT_IN, loaded]);
     assert_eq!(r.count(), ACTIONS.len() + 2);
 
     // Built-in rows keep their positions, so an index issued before the loaded
@@ -239,6 +239,7 @@ fn a_runtime_table_merges_beside_the_built_in_one() {
 /// built-in name -- if it could, a file would silently change what an action
 /// does while the palette still showed the built-in label.
 #[test]
+#[should_panic(expected = "duplicate action id \"term.copy\"")]
 fn a_runtime_table_cannot_redefine_a_built_in_action() {
     let hostile = Source {
         name: Cow::Owned(String::from("keymap.toml")),
@@ -249,17 +250,7 @@ fn a_runtime_table_cannot_redefine_a_built_in_action() {
             arg: ArgShape::None,
         }]),
     };
-    let err = try_merge(&[BUILT_IN, hostile])
-        .expect_err("a loaded table must not redefine a built-in action");
-    match err {
-        MergeError::DuplicateId {
-            id, second_source, ..
-        } => {
-            assert_eq!(id, "term.copy");
-            assert_eq!(second_source, "keymap.toml");
-        },
-        other => panic!("expected DuplicateId, got {other:?}"),
-    }
+    merge(&[BUILT_IN, hostile]);
 }
 
 #[test]
@@ -284,27 +275,15 @@ fn a_duplicate_names_both_sources_and_both_positions() {
         ]),
     };
 
-    let err = try_merge(&[BUILT_IN, other.clone()])
+    // The message is the whole diagnostic, and it is what `Source::name` exists
+    // for: it has to name both claimants and both positions, or someone reading
+    // a crash has nowhere to go.
+    let text = std::panic::catch_unwind(|| merge(&[BUILT_IN, other]))
         .expect_err("a duplicate must not merge");
-    match err {
-        MergeError::DuplicateId {
-            id,
-            first_source,
-            first_position,
-            second_source,
-            second_position,
-        } => {
-            assert_eq!(id, "term.copy");
-            assert_eq!(first_source, "baton-action");
-            assert_eq!(first_position, 6);
-            assert_eq!(second_source, "other-crate");
-            assert_eq!(second_position, 1);
-        },
-        other => panic!("expected DuplicateId, got {other:?}"),
-    }
-
-    // The message stands alone: it is what someone sees when boot refuses.
-    let text = try_merge(&[BUILT_IN, other]).unwrap_err().to_string();
+    let text = text
+        .downcast_ref::<String>()
+        .expect("the panic carries a formatted message")
+        .clone();
     for needle in ["term.copy", "baton-action", "other-crate", "6", "1"] {
         assert!(text.contains(needle), "message omits {needle:?}: {text}");
     }
@@ -313,6 +292,8 @@ fn a_duplicate_names_both_sources_and_both_positions() {
 /// A duplicate **within one source** is the same failure and the likelier one:
 /// a copy-pasted row in a growing table.
 #[test]
+#[should_panic(expected = "self-colliding index 0 collides with \
+                           self-colliding index 1")]
 fn a_duplicate_inside_one_source_is_also_rejected() {
     let twice = Source {
         name: Cow::Borrowed("self-colliding"),
@@ -331,21 +312,12 @@ fn a_duplicate_inside_one_source_is_also_rejected() {
             },
         ]),
     };
-    let err = try_merge(&[twice])
-        .expect_err("a source that collides with itself must not merge");
-    assert!(matches!(
-        err,
-        MergeError::DuplicateId {
-            first_position: 0,
-            second_position: 1,
-            ..
-        }
-    ));
+    merge(&[twice]);
 }
 
 #[test]
 fn an_empty_source_list_produces_an_empty_registry() {
-    let r = try_merge(&[]).unwrap();
+    let r = merge(&[]);
     assert!(r.count() == 0);
     assert!(r.resolve("anything").is_none());
 }

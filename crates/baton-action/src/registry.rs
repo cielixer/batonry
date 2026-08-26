@@ -2,7 +2,6 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::fmt;
 
 use crate::action::{Action, Channels, reachable_from};
 
@@ -103,81 +102,30 @@ impl Registry {
     }
 }
 
-/// Why a merge failed.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum MergeError {
-    /// Two actions claimed one name. **Both sides are named**, because "there
-    /// is a duplicate somewhere" is not an actionable message.
-    DuplicateId {
-        /// The name claimed twice.
-        id: String,
-        /// The source that claimed it first.
-        first_source: String,
-        /// Zero-based position within `first_source`.
-        first_position: usize,
-        /// The source that claimed it again.
-        second_source: String,
-        /// Zero-based position within `second_source`.
-        second_position: usize,
-    },
-    /// More actions than an [`ActionId`] can address.
-    TooManyActions {
-        /// How many were offered.
-        count: usize,
-    },
-}
-
-impl fmt::Display for MergeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::DuplicateId {
-                id,
-                first_source,
-                first_position,
-                second_source,
-                second_position,
-            } => write!(
-                f,
-                "duplicate action id {id:?}: {first_source} index \
-                 {first_position} collides with {second_source} index \
-                 {second_position}",
-            ),
-            Self::TooManyActions { count } => write!(
-                f,
-                "cannot register {count} actions: an ActionId is a u16, so {} \
-                 is the ceiling",
-                CEILING
-            ),
-        }
-    }
-}
-
-impl std::error::Error for MergeError {}
-
 /// How many actions an [`ActionId`] can address: every `u16` is a valid index.
 const CEILING: usize = u16::MAX as usize + 1;
 
 /// Merges sources into one registry, in the order given.
 ///
-/// A duplicate is rejected rather than letting one silently overwrite the other
-/// -- which is what a bare `HashMap::insert` would do, and which shows up much
-/// later as an action that quietly stopped existing.
+/// **An id is unique, and a duplicate is a bug rather than a condition**, so this
+/// panics instead of returning. Every source is a compile-time constant, which
+/// means two rows claiming one name is a wrong table and there is nothing a
+/// caller could do with the news. A test in this crate reaches it first. When a
+/// keymap file starts contributing rows, its loader is where they get validated,
+/// and that is the better place: it can name a line rather than a source.
 ///
-/// **Rejecting is the whole policy: there is no last-one-wins.** A table loaded
-/// at runtime adds actions; it does not redefine one that already exists. Giving
-/// it that power would mean a file could silently change what a built-in action
-/// does, and the palette would still show the built-in label.
-pub fn try_merge(sources: &[Source]) -> Result<Registry, MergeError> {
+/// **There is no last-one-wins.** A later source adds actions; it does not
+/// redefine one that exists. An `Action` row is a description and not behaviour
+/// -- the behaviour is whatever matches on the resolved [`ActionId`] -- so
+/// overwriting a row could never change what an action does, only what it claims
+/// to do. A palette entry that copies while calling itself something else is
+/// worse than a refusal.
+pub fn merge(sources: &[Source]) -> Registry {
     let count = sources.iter().map(|s| s.actions.len()).sum();
-    if count > CEILING {
-        return Err(MergeError::TooManyActions { count });
-    }
-
     let mut actions: Vec<Action> = Vec::with_capacity(count);
     let mut by_id: HashMap<String, ActionId> = HashMap::with_capacity(count);
     // Where each name came from, kept only so a duplicate can name both sides.
-    // Borrowed: every string already lives in `sources` and outlives this call,
-    // and the owned copies belong inside the error that needs them.
+    // Borrowed: every string already lives in `sources` and outlives this call.
     let mut origin: HashMap<&str, (&str, usize)> =
         HashMap::with_capacity(count);
 
@@ -186,25 +134,26 @@ pub fn try_merge(sources: &[Source]) -> Result<Registry, MergeError> {
             if let Some((first_source, first_position)) =
                 origin.get(row.id.as_ref())
             {
-                return Err(MergeError::DuplicateId {
-                    id: row.id.to_string(),
-                    first_source: (*first_source).to_owned(),
-                    first_position: *first_position,
-                    second_source: source.name.to_string(),
-                    second_position: position,
-                });
+                panic!(
+                    "duplicate action id {:?}: {} index {} collides with {} \
+                     index {}",
+                    row.id, first_source, first_position, source.name, position
+                );
             }
 
-            // The ceiling check above makes this conversion total. It is a
-            // conversion rather than an `as` cast so that loosening that check
-            // cannot silently start truncating.
-            let next = u16::try_from(actions.len())
-                .map_err(|_| MergeError::TooManyActions { count })?;
+            // A conversion rather than an `as` cast: `as` would truncate in
+            // silence, and an index that wraps to 0 aliases a real action.
+            let next = u16::try_from(actions.len()).unwrap_or_else(|_| {
+                panic!(
+                    "cannot register {count} actions: an ActionId is a u16, \
+                     so {CEILING} is the ceiling"
+                )
+            });
             by_id.insert(row.id.to_string(), ActionId(next));
             origin.insert(row.id.as_ref(), (source.name.as_ref(), position));
             actions.push(row.clone());
         }
     }
 
-    Ok(Registry { actions, by_id })
+    Registry { actions, by_id }
 }

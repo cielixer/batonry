@@ -1,9 +1,9 @@
 # Review checklist
 
 The single source of truth for what a review checks, how findings are graded,
-and when a change passes. `CLAUDE.md` is the authority for the rules -- and when
-the diff touches `crates/baton-term`, `crates/baton-term/CLAUDE.md` carries that
-crate's own rules on top of it. This file
+and when a change passes. `CLAUDE.md` is the authority for the rules, and a
+crate's own `CLAUDE.md` adds to it for that crate: read the one belonging to every
+crate the diff touches. This file
 says how to apply them.
 
 ## Severity
@@ -19,7 +19,7 @@ says how to apply them.
 
 ## 1. Architecture contracts
 
-`CLAUDE.md` section 6 numbers eleven contracts A1-A11 and states, for each, what
+`CLAUDE.md` section 4 numbers eleven contracts A1-A11 and states, for each, what
 breaks later if it is ignored. They exist because each one is cheap to honour now
 and a rewrite to retrofit. Check the ones the change touches, and check the
 ticket's stated contract in particular.
@@ -35,7 +35,7 @@ The ones most often violated by plausible-looking code:
   router. A direct call from a widget to a PTY write is the failure that cannot
   be retrofitted.
 
-Also structural, from sections 2 and 7c:
+Also structural, from sections 2 and 5:
 
 - `baton-core` depends on no UI and no I/O; `baton-action` does not know `iced`
   exists; `baton-term` does not know `baton-core` exists.
@@ -70,7 +70,7 @@ Also structural, from sections 2 and 7c:
 ## 4. Cost
 
 - Per-frame work: is text reshaped, is a grid cloned, is a cache cleared
-  unconditionally? The performance floors in `CLAUDE.md` section 9 are
+  unconditionally? The performance floors in `CLAUDE.md` section 6 are
   completion criteria, not aspirations.
 - Allocation inside a loop over cells. There are hundreds of thousands of them.
 - Does an idle pane cause work? Idle across twelve panes has a 2% CPU ceiling.

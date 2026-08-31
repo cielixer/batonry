@@ -16,11 +16,13 @@ is confident, ask what it is assuming.
 
 ## Read first
 
-1. `CLAUDE.md` -- the implementation contract. Section 6 numbers eleven
+1. The `CLAUDE.md` of the crate the plan targets, if it has one. The root's
+   section 1 indexes them; they are not loaded for you.
+2. `CLAUDE.md` -- the implementation contract. Section 4 numbers eleven
    architecture rules A1-A11, each with the failure it prevents. A plan that
    quietly violates one is the most expensive thing you can find here.
-2. `{{TICKET}}` -- the ticket in full, including its "Definition of done".
-3. The files its "Read first" section names -- enough to judge whether the plan
+3. `{{TICKET}}` -- the ticket in full, including its "Definition of done".
+4. The files its "Read first" section names -- enough to judge whether the plan
    matches the code that exists.
 
 ## What to look for, in order

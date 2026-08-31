@@ -20,12 +20,15 @@ work at once, and `HEAD` shows you only half of it.
 
 ## Read first
 
-1. `CLAUDE.md` -- the implementation contract, and the authority for this
+1. The `CLAUDE.md` of every crate the diff touches, if it has one. The root's
+   section 1 indexes them, they are as binding as the root, and they are not
+   loaded for you -- read them.
+2. `CLAUDE.md` -- the implementation contract, and the authority for this
    review. A change that violates it is rejected regardless of how good the
    code is.
-2. `.claude/skills/codex/review-checklist.md` -- the checklist, severity
+3. `.claude/skills/codex/review-checklist.md` -- the checklist, severity
    definitions, and the approval gate.
-3. `{{TICKET}}` -- the ticket, already fetched for you; read its "Definition
+4. `{{TICKET}}` -- the ticket, already fetched for you; read its "Definition
    of done" and "Architecture contract". **You have no network: do not try
    `gh`.** If that path is empty, the intent is in the context block below.
 

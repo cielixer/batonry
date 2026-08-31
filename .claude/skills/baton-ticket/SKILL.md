@@ -115,6 +115,12 @@ Read the trailing tag: `IMPLEMENTATION_COMPLETE` means review the batch;
 `IMPLEMENTATION_PARTIAL` means read the report and either resume for the
 remainder or finish the leftovers yourself during review.
 
+**If the delegate is unavailable** -- quota exhausted, outage -- implement the
+batch yourself and record the ruling in the ledger. The brief you wrote for the
+delegate is the design; follow it as written. The cost is fewer eyes before the
+gate, which the gate's cross-model (or fresh-context) review compensates. #17
+and #12 both ran this way.
+
 ### 3. Review the batch
 
 In this order. The tests come **before** the micro-gate, because writing them
@@ -144,11 +150,25 @@ longer exists.
    and diffing shows exactly what a reordering added and removed -- if it is a
    pure move, the diff is empty.
 
+   **A rewrite that qualifies identifiers must not run over string literals.**
+   Test data is data: on #12 a regex turning `PANE_FOCUSED` into
+   `Flags::PANE_FOCUSED` also rewrote the `"PANE_FOCUSED"` rejection *datum*,
+   silently unpinning the SCREAMING_CASE regression -- the suite stayed green
+   because the corrupted datum still failed to parse, just for a weaker
+   reason. Exclude string contents from mechanical rewrites, then diff the
+   test files separately and read every changed literal.
+
    **Confirm the mutation landed before believing the result.** A string
    replacement that matches nothing reports a clean pass and proves nothing --
    #11 reported three of them, because rustfmt had split the target across lines
    and a later attempt matched the same identifier in a different table. Print
    the mutated line, or assert the replacement happened.
+
+   **Restore a mutant by copying the file back, never with `git checkout --`.**
+   That command restores from the *index*, and this loop keeps earlier batches
+   staged -- on #12 it silently reverted a file to its pre-refactor staged
+   version, and only the next compile caught it. `cp` the file aside before
+   mutating and `cp` it back after.
 
    The cross-model review checks test *validity* at the gate -- vacuous assertions, dead branches, fixtures that
    prove nothing -- but not until then, so do not lean on it here.

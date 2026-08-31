@@ -44,20 +44,6 @@ mod id {
     pub const TERM_CLEAR: &str = "term.clear";
 }
 
-/// Actions stage 1 can actually perform.
-pub const ACTIONS: &[Action] = &[
-    act(id::APP_QUIT, "Quit", PALETTE),
-    act(id::PALETTE_OPEN, "Command Palette", KEY_ONLY),
-    act(id::PALETTE_CLOSE, "Close Palette", KEY_ONLY),
-    act(id::PALETTE_CONFIRM, "Run", KEY_ONLY),
-    act(id::PALETTE_NEXT, "Next Result", KEY_ONLY),
-    act(id::PALETTE_PREV, "Previous Result", KEY_ONLY),
-    act(id::TERM_COPY, "Copy", union(PALETTE, MENU)),
-    act(id::TERM_PASTE, "Paste", union(PALETTE, MENU)),
-    act(id::TERM_SELECT_ALL, "Select All", KEY_ONLY),
-    act(id::TERM_CLEAR, "Clear Screen", PALETTE),
-];
-
 /// Every stage-1 action takes no argument, so the shape is not repeated ten
 /// times. An action that needs one spells it out instead of using this.
 const fn act(
@@ -73,25 +59,8 @@ const fn act(
     }
 }
 
-/// The built-in keymap.
-///
-/// **Every unmodified key here is guarded.** A key not in this table reaches the
-/// terminal, so this table *is* the interception set -- an unguarded bare key
-/// silently stops reaching the shell, which is the first thing a terminal user
-/// notices.
-pub const DEFAULT_KEYMAP: &[Binding] = &[
-    bind(id::PALETTE_OPEN, "meta+KeyK", Some("!palette_open")),
-    bind(id::PALETTE_CLOSE, "Escape", Some("palette_open")),
-    bind(id::PALETTE_CONFIRM, "Enter", Some("palette_open")),
-    bind(id::PALETTE_NEXT, "ArrowDown", Some("palette_open")),
-    bind(id::PALETTE_PREV, "ArrowUp", Some("palette_open")),
-    bind(id::APP_QUIT, "meta+KeyQ", None),
-    bind(id::TERM_COPY, "meta+KeyC", Some("has_selection")),
-    bind(id::TERM_PASTE, "meta+KeyV", Some("pane_live")),
-    bind(id::TERM_SELECT_ALL, "meta+KeyA", Some("pane_focused")),
-    bind(id::TERM_CLEAR, "meta+shift+KeyK", Some("pane_live")),
-];
-
+/// One row of the built-in keymap. The condition stays a string here; it
+/// is parsed when the keymap is assembled, not at a keypress.
 const fn bind(
     action: &'static str,
     key: &'static str,
@@ -106,6 +75,57 @@ const fn bind(
         },
     }
 }
+
+/// Actions stage 1 can actually perform.
+pub const ACTIONS: &[Action] = &[
+    act(id::APP_QUIT, "Quit", PALETTE),
+    act(id::PALETTE_OPEN, "Command Palette", KEY_ONLY),
+    act(id::PALETTE_CLOSE, "Close Palette", KEY_ONLY),
+    act(id::PALETTE_CONFIRM, "Run", KEY_ONLY),
+    act(id::PALETTE_NEXT, "Next Result", KEY_ONLY),
+    act(id::PALETTE_PREV, "Previous Result", KEY_ONLY),
+    act(id::TERM_COPY, "Copy", union(PALETTE, MENU)),
+    act(id::TERM_PASTE, "Paste", union(PALETTE, MENU)),
+    act(id::TERM_SELECT_ALL, "Select All", KEY_ONLY),
+    act(id::TERM_CLEAR, "Clear Screen", PALETTE),
+];
+
+/// The built-in keymap.
+///
+/// **Every unmodified key here is guarded.** A key not in this table reaches the
+/// terminal, so this table *is* the interception set -- an unguarded bare key
+/// silently stops reaching the shell, which is the first thing a terminal user
+/// notices.
+///
+/// **Every `term.*` binding names `pane_focused`.** A guard on the pane's state
+/// alone is not enough: `pane_live` says the connection is up, not that the
+/// keyboard is pointed at it, so `⌘V` typed into the palette would have pasted
+/// into the terminal behind it. `tests/lookup.rs` asserts no terminal action
+/// resolves without focus.
+pub const DEFAULT_KEYMAP: &[Binding] = &[
+    bind(id::PALETTE_OPEN, "meta+KeyK", Some("!palette_open")),
+    bind(id::PALETTE_CLOSE, "Escape", Some("palette_open")),
+    bind(id::PALETTE_CONFIRM, "Enter", Some("palette_open")),
+    bind(id::PALETTE_NEXT, "ArrowDown", Some("palette_open")),
+    bind(id::PALETTE_PREV, "ArrowUp", Some("palette_open")),
+    bind(id::APP_QUIT, "meta+KeyQ", None),
+    bind(
+        id::TERM_COPY,
+        "meta+KeyC",
+        Some("pane_focused && has_selection"),
+    ),
+    bind(
+        id::TERM_PASTE,
+        "meta+KeyV",
+        Some("pane_focused && pane_live"),
+    ),
+    bind(id::TERM_SELECT_ALL, "meta+KeyA", Some("pane_focused")),
+    bind(
+        id::TERM_CLEAR,
+        "meta+shift+KeyK",
+        Some("pane_focused && pane_live"),
+    ),
+];
 
 /// This crate's contribution to the boot-time merge.
 pub const BUILT_IN: Source = Source {

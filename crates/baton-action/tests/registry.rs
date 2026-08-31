@@ -18,8 +18,8 @@ use std::borrow::Cow;
 use std::collections::HashSet;
 
 use baton_action::{
-    ACTIONS, Action, ArgShape, BUILT_IN, KEY_ONLY, PALETTE, Source, merge,
-    reachable_from,
+    ACTIONS, Action, ArgShape, BUILT_IN, CLICK, Channels, DRAG, KEY_ONLY, MENU,
+    PALETTE, Source, merge, reachable_from,
 };
 
 /// The ten ids stage 1 implements. Written out rather than derived from
@@ -116,6 +116,38 @@ fn iter_is_the_whole_table_in_order() {
     for ((id, action), expected) in r.iter().zip(ACTIONS) {
         assert_eq!(action, expected);
         assert_eq!(r.get(id), Some(expected));
+    }
+}
+
+/// Each surface occupies its own bit, so a set really is a set.
+///
+/// The bit is the constant's position in the `bitset!` declaration, counted by
+/// the macro. An aliasing bit would make one surface answer for another with
+/// nothing failing to compile -- and unlike the shifts it replaced, the number
+/// is no longer visible in the source to be checked by eye.
+#[test]
+fn each_channel_occupies_its_own_bit() {
+    const EVERY: [(Channels, &str); 4] = [
+        (PALETTE, "PALETTE"),
+        (CLICK, "CLICK"),
+        (MENU, "MENU"),
+        (DRAG, "DRAG"),
+    ];
+
+    for (i, (channel, name)) in EVERY.iter().enumerate() {
+        assert!(
+            reachable_from(*channel, *channel),
+            "{name} does not contain itself"
+        );
+        for (j, (other, other_name)) in EVERY.iter().enumerate() {
+            if i == j {
+                continue;
+            }
+            assert!(
+                !reachable_from(*channel, *other),
+                "{name} also reports {other_name}"
+            );
+        }
     }
 }
 

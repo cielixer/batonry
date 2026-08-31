@@ -22,6 +22,27 @@ pub struct Action {
     pub arg: ArgShape,               // None|Host|Pane|TabIndex|Snippet|HostTab{..}|...
 }
 pub const KEY_ONLY: Channels;        // the empty set. Build a row with it; never query with it
+
+// baton-action/src/context.rs -- what a `when` clause can name. Same shape as Channels (#87)
+pub struct Flags(u32);               // which conditions hold, and equally one condition
+pub const PANE_FOCUSED: Flags;       // seventeen of these
+// Both bitsets declare their constants **and their two operations** with `bitset!`
+// (#88, #90). No shift and no bit arithmetic is written by hand outside that macro,
+// and a test per type pins both. The operations are named by the caller because the
+// question differs -- `reachable_from` asks about a surface, `holds` about a condition.
+// **`bitflags` is not used** (#90): its operations are not `const fn` and the tables
+// here are `const`, and `from_name` matches the constant identifier rather than the
+// spelling the specification fixes.
+pub const NONE: Flags;               // the empty set. Same hazard as KEY_ONLY
+pub const fn holds(set: Flags, wanted: Flags) -> bool;
+pub const fn combine(set: Flags, extra: Flags) -> Flags;   // `union` is taken at the crate root
+pub struct Flag(Flags);              // exactly one condition: a clause's leaf
+impl FromStr for Flag;               // the only way to build one. The field is private
+impl From<Flag> for Flags;           // widen to a set of one, to ask `holds`
+// **A leaf holds one condition, by construction** (#89, #92). A set holds none or several,
+// and a leaf holding either prints something that does not parse back to it. There is no
+// checked constructor because there is nothing to check: a name yields one bit. Only
+// `Flag` converts to and from a name; `Flags` has no `Display` and no `FromStr`.
 pub const fn reachable_from(set: Channels, surface: Channels) -> bool;
 pub const fn union(set: Channels, extra: Channels) -> Channels;   // a fn, not `|`, because const
 
@@ -69,12 +90,18 @@ impl Registry {
 
 **`merge` does not validate a row's content, and #25 must not fix that by growing it.** An empty id, an empty label, an id that breaks the naming convention: all merge cleanly today, and nothing unchecked can reach it because every source is a `const` the tests read directly. The keymap loader is where a loaded row gets checked, and it is the better place: it can name a line. An id is unique, and every source is a compile-time constant, so two rows claiming one name is a wrong table rather than a condition a caller could act on. Taking `Source { name, actions }` is what lets the message **name both sources and both positions**, which an anonymous slice could not. When a keymap file starts contributing rows, **its loader validates them** -- that is the better place, because it can name a line.
 
+**A keypress is a hash, not a scan.** `Keymap` is keyed by chord and `lookup`
+takes the guard from there; `Registry::resolve` is keyed by name for the same
+reason (#80). The rows are not public -- `entries()` was removed once nothing
+but a test used it, and #12 will decide the shape it actually needs.
+
 **`when` guards the binding, not the action.** The order of judgement is *"if it is in the keymap and `when` passes, publish the action; everything else goes through the input router to the PTY"*, so `when` decides **whether the keystroke is ours in the first place.** It is conditional interception, not a disabled action. `term.copy` is the example: with a selection it copies, and without one `⌘C` **goes to the PTY.** One action may carry several bindings, or none.
 
 - **The registry hands out `(ActionId, &Action)` and never its slice** (#80). Every list a surface draws becomes a message, so an accessor that returns `&Action` alone forces the caller to `resolve` an id string it just read -- the index accessor being private is what makes that unavoidable. `iter` is the whole table and `reachable(surface)` is the filter a palette *is*; there is no `rows()`, `len()` or `is_empty()`.
 - **Every action is registered.** The palette is `reachable(PALETTE)` and nothing else. **If the mouse can do it and the palette cannot, that is a bug.**
   **Being in the registry and being in the palette are still different things.** A host-key modal's confirm and cancel go through the registry (A10: a click does not call a function directly) but do not appear in the palette. They are not the kind of thing a person hunts for, and greying them out fills the list with noise. The dividing line is **"should a user be able to invoke this from anywhere?"**
-- **Keep `when` clauses minimal.** Context identifiers and **`!`, `&&`, `||`, `==`** only. Warp does this in 124 lines and VSCode in 2,183; **we are on Warp's side.** The target is under 200 lines.
+- **Keep `when` clauses minimal.** Context identifiers and **`!`, `&&`, `||`, `==`** only. Warp does this in 124 lines and VSCode in 2,183; **we are on Warp's side.**
+  **The constraint is the grammar, not a line count** (#83). Five node kinds and four operators, and adding one is the thing to argue about. A line budget measures the wrong thing: it counts doc comments and error messages, which should grow, and it says nothing about a single operator that doubles what a clause can express.
   **The operators are symbols, not words (`and`, `or`, `not`).** This is a file a user writes by hand, and the keymap syntax people already know (VSCode and Zed) uses `!` and `&&`.
 - Sources worth reading: Zed's `crates/gpui/src/keymap/context.rs` (891 lines, Apache-2.0) and Warp's `crates/warpui_core/src/keymap/context.rs` (124 lines, **MIT**).
 - Use `nucleo` for fuzzy search. Do not write one.

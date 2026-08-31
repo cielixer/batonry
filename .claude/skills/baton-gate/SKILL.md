@@ -152,6 +152,13 @@ free-form prose goes through `--extra-file`, never argv.
 Tell it the suite passed. The reviewer is told not to hunt for coverage gaps,
 and knowing the suite is green keeps it from guessing.
 
+**If the reviewer is unavailable** -- quota exhausted, outage -- substitute a
+fresh-context agent of the current model, read-only, against the same contract
+files and checklist, holding the same empirical standard: demonstrate what it
+claims broken, say how it confirmed what it calls load-bearing. Fresh context
+is the property doing the work; #17 and #12 gated this way.
+
+
 ### The loop
 
 **An approval covers the branch as it stood.** Anything committed after it has

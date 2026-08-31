@@ -1,4 +1,3 @@
-.claude/skills/baton-gate/SKILL.md
 .github/ci/check-english-only.sh
 CLAUDE.md
 crates/baton-term/tests/fixtures/hangul-2set-before-winit-fix.jsonl

@@ -1,0 +1,65 @@
+# CI runs on macOS because that is what the app targets: the IME fix lives in
+# the AppKit backend and its regression tests replay recorded macOS input
+# events. A Linux compile job is deliberately deferred (owner's call, #17).
+#
+# Triggers: pull_request is the gate -- failures belong before the merge --
+# and push-to-main is insurance, because a squash merge creates a commit that
+# existed on no branch, and two independently green PRs can still conflict
+# semantically. Superseded PR runs are cancelled; main runs never are.
+#
+# Draft PRs skip both jobs: a PR opens as a draft for the owner's review, and
+# CI belongs after that review, when it is marked ready (which triggers a run
+# via ready_for_review). Skipped drafts also stay out of the macOS queue.
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  suite:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: fmt
+        run: cargo fmt --all --check
+      - name: clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: build
+        run: cargo build --workspace
+      - name: test
+        run: cargo test --workspace
+      - name: doc links
+        run: RUSTDOCFLAGS="-D rustdoc::broken_intra_doc_links" cargo doc --no-deps
+
+  # The rules nothing but this repository enforces. Each script also runs
+  # locally, unchanged, which is the point: CI and a hand-run gate share one
+  # implementation instead of two that drift.
+  repo-rules:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: english only, against the allowlist
+        run: ./.github/ci/check-english-only.sh
+      - name: winit divergence matches UPSTREAM.diff
+        run: ./.github/ci/check-hardcopy-winit.sh
+      - name: baton-term divergence matches UPSTREAM.diff
+        run: ./.github/ci/check-hardcopy-term.sh

@@ -141,11 +141,8 @@ trait Substrate {
 - **A comment says what the code is, not what it used to be.** Change history, withdrawn designs, and what a review proposed and lost belong in `DECISIONS.md` and in the commit message. Delete a sentence that describes a design no longer present ("an earlier shape pushed the rows out") or defends a decision already made ("named `resolve` rather than `id` because…"). Length itself is not the problem: a measured number, a hazard, or why a cast would be wrong stays even when it runs long.
 - **A surprising rule goes inline, beside the line that implements it.** Not a paragraph above the function. The shorthand accepting `a` and rejecting `A` is the example, and two lines cover it. That line is where someone would go to break the rule.
 - **There is a reason for all of this.** This repository will be public, and our patch to `crates/winit` is a candidate to send upstream. Translating later always costs more than writing English now.
-- **This is how it is checked.** The output of `git ls-files | xargs grep -l '[가-힣]'` has to be **explainable**, and the legitimate list is **exactly ten files** (verified 2026-08-31).
-  `crates/baton-term/tests/{fixtures/hangul-2set.jsonl,fixtures/hangul-2set-before-winit-fix.jsonl,ime.rs,vt_conformance.rs}` is test data;
-  `crates/winit/{src/keyboard.rs,src/platform_impl/macos/view.rs,UPSTREAM.diff,NOTICE.md}` is upstream text and IME evidence;
-  and `.claude/skills/baton-gate/SKILL.md` plus **this file** are **the case where the check contains the characters it searches for** -- the class `[가-힣]` is itself the data, and so are the examples above it.
-  **An eleventh file is a rejection, and if the list shrinks, shrink the list.** An over-permissive allowlist makes the check meaningless.
+- **This is how it is checked.** CI runs `.github/ci/check-english-only.sh` on every pull request: the output of `git ls-files | xargs grep -l '[가-힣]'` must equal **`.github/korean-allowlist.txt`**, which is the only enumeration -- restating the paths here is how two copies drift. What the list holds, by category: the `baton-term` IME and conformance fixtures are test data; the `crates/winit` sources, `UPSTREAM.diff` and `NOTICE.md` are upstream text and quoted IME evidence; and `.claude/skills/baton-gate/SKILL.md`, **this file**, and the check script itself are the case where the check contains the characters it searches for -- the class `[가-힣]` is itself the data.
+  **A difference in either direction fails.** An extra file is an English-only violation; a missing one means the allowlist has gone over-permissive and shrinks in the same commit.
 
 ## 6. Performance floors -- these are completion criteria
 

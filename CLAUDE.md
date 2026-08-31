@@ -45,7 +45,7 @@ Rules that apply to one crate live with that crate, and the harness loads them w
 
 | File | What it holds |
 |---|---|
-| [`crates/baton-action/CLAUDE.md`](./crates/baton-action/CLAUDE.md) | the action table, the registry, the keymap, `when` clauses, the input router |
+| [`crates/baton-action/CLAUDE.md`](./crates/baton-action/CLAUDE.md) | the action table, the registry, the keymap, `when` clauses |
 | [`crates/baton-ui/CLAUDE.md`](./crates/baton-ui/CLAUDE.md) | UI rules, the theme, view state, sidebar and pane behaviour, layout regressions |
 | [`crates/baton-ssh/CLAUDE.md`](./crates/baton-ssh/CLAUDE.md) | the enforced `ssh` configuration, `ControlMaster`, `ProxyJump`, error classification |
 | [`crates/baton-store/CLAUDE.md`](./crates/baton-store/CLAUDE.md) | the SQLite schema, inheritance, workspaces and scratch, export and import |
@@ -65,8 +65,8 @@ batonry/
   crates/
     baton/          one main.rs. Injects adapters and runs. No logic
     baton-ui/       iced screen assembly, projection, Elm wiring   <- no main, so it is headless-testable
-    baton-core/     the hexagon. The domain, and port traits
-    baton-action/   action table, registry, keymap, when clauses, input router
+    baton-core/     the hexagon. The domain, port traits, and the input router
+    baton-action/   action table, registry, keymap, when clauses
     baton-term/     the iced terminal widget (started as an iced_term hardcopy)  -> extraction candidate
     baton-ssh/      the system ssh process, ControlMaster, ProxyJump
     baton-store/    SQLite, export/import
@@ -116,7 +116,7 @@ batonry/
 | A8 | Correctness is a **settled property**. It may be wrong mid-drag and mid-resize as long as it is right once the gesture ends | synchronous sizing occupies the main thread |
 | A9 | **The shell layout has two docks, left and right, from the start.** The right one may be permanently collapsed in M1 | attaching the right dock in M2 means reworking the centre's size calculation and pane splitting |
 | A10 | **Every behaviour goes through the action registry.** See `crates/baton-action/CLAUDE.md` | building the palette becomes a rewiring of the whole app |
-| A11 | **Input goes through the router.** See `crates/baton-action/CLAUDE.md` | broadcast cannot be inserted later |
+| A11 | **Input goes through the router** -- `baton_core::dispatch`, a pure function (#102, #103): keystrokes, paste, snippets and palette sends all converge on it. Never build `pane.on_key() -> pty.write()`; never append a newline on the send path (M2/M3 prefill commands and leave Enter to the user); `TargetSet::Set` stays UI-less in M1. Detail lives in `router.rs`'s module docs and its tests | broadcast cannot be inserted later |
 
 ```rust
 trait Substrate {

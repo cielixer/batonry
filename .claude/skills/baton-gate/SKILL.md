@@ -82,7 +82,7 @@ that test be weakened.
 `UPSTREAM.diff` per its header and confirm no unexplained delta.
 
 **Everything git tracks is English**, except fixtures whose subject *is* the
-text. The allowlist lives in `CLAUDE.md` section 7c and **is not restated here**
+text. The allowlist lives in `CLAUDE.md` section 5 and **is not restated here**
 -- one number in two places is how it drifts, and it already moved twice in a
 day. Compare, and treat a difference in **either** direction as a failure: an
 extra file is an English-only violation, a missing one means the allowlist is
@@ -115,6 +115,14 @@ any grammar, schema or vocabulary it touches (see `baton-plan`). Check each one
 either changed or is explicitly unaffected. Generated files are rebuilt from
 their generator, never hand-edited.
 
+**A shared abstraction needs its guarantees tested everywhere it is shared.**
+Factoring two things into one macro or one helper moves what used to be visible
+in each into a place nothing checks. On #11 the shared `bitset!` computed bit
+positions that had previously been written out and reviewable by eye; breaking
+the macro failed one type's tests and passed the other's, because only one had a
+test for the property. Check that each user of a new shared thing pins what it
+now relies on.
+
 **Test flakiness is a failure, not a retry.** Run `cargo test --workspace`
 **three consecutive times** and require three passes. A test that passes on a
 later attempt is a defect report: this repository has already had a gauge
@@ -123,8 +131,8 @@ would have buried it.
 
 ## 3. Cross-model review
 
-`gpt-5.6-sol` at xhigh, read-only, against `CLAUDE.md` and
-`.claude/skills/codex/review-checklist.md`. **Run it in the background** with
+`gpt-5.6-sol` at xhigh, read-only, against `CLAUDE.md`, the `CLAUDE.md` of every
+crate the diff touches, and `.claude/skills/codex/review-checklist.md`. **Run it in the background** with
 `CODEX_TIMEOUT=1800` as a circuit breaker, and put the brief in a file -- all
 free-form prose goes through `--extra-file`, never argv.
 
@@ -138,6 +146,13 @@ Tell it the suite passed. The reviewer is told not to hunt for coverage gaps,
 and knowing the suite is green keeps it from guessing.
 
 ### The loop
+
+**An approval covers the branch as it stood.** Anything committed after it has
+not been reviewed, so if the branch moves -- and on #11 it moved three times,
+twice changing the public API -- the gate runs again from step 0. Say in the
+brief what landed since, so the reviewer reads a delta rather than the whole
+branch a second time. That re-run found a Critical the first pass could not
+have: the change that caused it did not exist yet.
 
 - `APPROVED` -- go to step 4.
 - `REQUEST_CHANGES` -- **engage critically.** Open every `file:line` it cites
@@ -172,15 +187,38 @@ answerable later.
 per-ticket and gitignored, so whatever stays in it dies with the ticket. Each
 lesson has exactly one of three homes:
 
-| kind | goes to |
-|---|---|
-| A convention the implementer should have known | `codex/prompts/implement.tpl` |
-| A gap in how this workflow runs | the relevant `SKILL.md` |
-| A choice someone will question later | `DECISIONS.md` |
+| kind | goes to | lands |
+|---|---|---|
+| A choice someone will question later | `DECISIONS.md` | **in this branch** |
+| A convention the implementer should have known | `codex/prompts/implement.tpl` | on the follow-up branch |
+| A gap in how this workflow runs | the relevant `SKILL.md` | on the follow-up branch |
 
-The first ticket through here produced four durable lessons and three of them
-survived only because someone asked for a retrospective afterwards. This step is
-that retrospective, made routine and small.
+**Only the first lands here, and the reason is what it is tracked by.** `docs/`
+is gitignored, so a `DECISIONS.md` entry never enters a commit and cannot widen
+one. The other two are tracked files, and this repository squash-merges: putting
+them in the ticket's branch gives `main` a single commit holding both the
+feature and workflow documentation its message does not mention. `baton-ticket`
+says the same thing about a tooling defect found mid-loop, and for the same
+reason.
+
+So: write the entry, and for anything tracked, **capture the diff and then put
+the tree back** -- the capture alone is not enough, because the edits it was
+made from are still in the working tree and step 5 would commit them, which is
+the exact failure this split exists to prevent:
+
+    git diff -- .claude > .claude/skills/codex/state/ticket-<n>.lessons.patch
+    git restore .claude
+
+The pathspec matters too: a bare `git diff` would sweep any unstaged ticket work
+into the lessons patch. Name the patch in the ledger; it lands on a branch off
+`main` after this PR is open, with the other tooling work that has accumulated.
+
+This step exists because the first ticket through here produced four durable
+lessons and three survived only because someone asked for a retrospective
+afterwards. The split exists because #11 shipped 63 lines of workflow
+documentation inside a feature branch, which the cross-model review caught as a
+Major -- these two skills were giving opposite instructions, and this table is
+the half that was wrong.
 
 ## 5. Commit and open the PR
 

@@ -5,9 +5,10 @@
 
 # Planning and design notes. Deliberately not tracked: the plan of record lives
 # in GitHub issues and the project board, and keeping a second copy in the repo
-# means two sources of truth that drift apart.
+# means two sources of truth that drift apart. Every CLAUDE.md *is* tracked --
+# it is the implementation contract, not a note, and a contract that gates every
+# pull request should be reviewable in one.
 /docs/
-CLAUDE.md
 
 # Local scratch
 /_to_delete/

@@ -55,7 +55,7 @@ instead of being inferred from a directory path.
 | dropped | why |
 |---|---|
 | Its numbered documentation tree (`1-plans`, `2-changelog`, `3-code-review`, …) | The planning notes for this project live outside the repository and have their own structure. A second tree inside it would compete with them |
-| `ARCHI.md` | `CLAUDE.md` already is that file. Two canonical descriptions of the architecture is the exact failure its own section 11 forbids |
+| `ARCHI.md` | `CLAUDE.md` already is that file. Two canonical descriptions of the architecture is the exact failure its own section 8 forbids |
 | Plan documents | The GitHub ticket **is** the plan: four required sections, one ticket per PR per session. A plan file would be a second copy that drifts |
 | `TRIP-3-release` | Versioning, changelogs, tags and fast-forward merges, for a pre-alpha with no releases. The branch and PR flow is already decided |
 
@@ -71,8 +71,8 @@ Override per run with `CODEX_MODEL`, `CODEX_EFFORT`, `CODEX_TIER`.
 
 ## One thing to know before cloning
 
-These skills refer to `CLAUDE.md` and to a decisions log, neither of which git
-tracks: the planning notes for this project are deliberately kept out of the
+These skills refer to a decisions log, which git does not
+track: the planning notes for this project are deliberately kept out of the
 repository. So a fresh clone gets skills whose most important reference is
 missing. That is a real limitation rather than an oversight -- the alternative
 was publishing prose that was never written for anyone else to read.

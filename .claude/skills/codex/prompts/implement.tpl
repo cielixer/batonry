@@ -5,15 +5,43 @@ The unit of work is `{{TARGET}}`.
 
 ## Read first, in this order
 
-1. `CLAUDE.md` -- the implementation contract. Not a style guide: it is a list
+1. The `CLAUDE.md` of every crate you will touch, if it has one. The root's
+   section 1 indexes them. These are not loaded for you -- read them.
+2. `CLAUDE.md` -- the implementation contract. Not a style guide: it is a list
    of rules whose violation means the change is rejected. Read all of it.
-2. `{{TICKET}}` -- the ticket, already fetched for you. Its "Definition of
+3. `{{TICKET}}` -- the ticket, already fetched for you. Its "Definition of
    done" is the acceptance criteria and its "Architecture contract" names the
    rules you are on. **You have no network: do not try `gh`.** If that path is
    empty, the work was described in the instruction block instead.
-3. The files the ticket's "Read first" section points at.
+4. The files the ticket's "Read first" section points at.
 
 ## Non-negotiable rules for this repository
+
+**Run `cargo fmt --all` before you measure or report anything, and include
+`cargo fmt --all --check` among your checks.** A file that has never been
+formatted is not the file that gets committed. One batch reported a module at
+142 lines that rustfmt turned into 258, so the size budget it claimed to meet
+had been met by compressing the formatting rather than by writing less.
+
+**Do not reach for `unsafe`.** These crates have none. If something looks like it
+needs it, say so in your report instead: one batch used
+`std::mem::transmute::<Flag, u8>` to compare two fieldless enums, where `as u8`
+is safe, is shorter, and works in a `const fn`.
+
+**When a check disappears, so do the comments that cite it.** Removing
+`Flag::new` left a comment three lines away explaining that "`new` admits no
+other". Grep for the name of anything you delete before reporting.
+
+**A public enum is not yours alone to construct.** If a variant's field admits
+values your code never builds, someone outside the crate can build them, and any
+contract stated on that type has to hold for those too. "The parser never
+produces that" is not an argument when the variant is public: either the type
+rejects it or the contract is wrong.
+
+**Do not use an error return to stand in for a state that cannot happen.**
+Restructure until the arm does not exist. A `Display` impl returning
+`Err(fmt::Error)` because a lookup table might not contain an entry it always
+contains is the shape to avoid.
 
 **Never edit `crates/winit`.** It is a **frozen** copy of an upstream crate --
 not identical to upstream, since it carries a deliberate macOS IME patch, but

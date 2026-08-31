@@ -35,6 +35,9 @@ consequence.
 ## Setup
 
 1. Read `CLAUDE.md` in full. It is the contract every batch is judged against.
+   Then read the `CLAUDE.md` of every crate this ticket touches -- the root's
+   section 1 lists which crates have one. Those rules are as binding as the
+   root's, and a batch is judged against both.
 2. `gh issue view <n>` -- the ticket is the plan. Read its "Read first" list and
    actually read those files. If the four sections are missing or vague, stop and
    use `baton-plan` instead; implementing an unclear ticket produces work that
@@ -124,13 +127,32 @@ longer exists.
 2. **Confirm no frozen crate was touched.** Non-negotiable, every batch.
 3. **Fix problems yourself.** Do not send fixes back -- a round trip costs more
    than the edit. What you fixed and why becomes the next batch's notes.
-4. **Write the tests this batch needs.** They are yours. The user does not read
+4. **Read a test file before writing to it.** A whole-file write destroys what
+   is there: #11 overwrote `tests/keymap.rs` and lost six tests from #10, and one
+   of the replacements contradicted a position that file had recorded. If the new
+   tests are about a different subject they belong in a different file, which is
+   usually the better split anyway.
+5. **Write the tests this batch needs.** They are yours. The user does not read
    test code, so the standard is on you: a regression test is verified by
    reintroducing the bug and watching it fail. A test that passes both ways is
-   worse than none, because it is believed. The cross-model review checks test
-   *validity* at the gate -- vacuous assertions, dead branches, fixtures that
+   worse than none, because it is believed.
+
+   **Move code by line ranges, and check the move before believing it.** Cutting
+   two blocks by byte offset shifts the second one's indices when the first is
+   removed; on #11 that silently truncated a function's closing brace, and the
+   same command's `cargo build` still reported success. Sorting both versions
+   and diffing shows exactly what a reordering added and removed -- if it is a
+   pure move, the diff is empty.
+
+   **Confirm the mutation landed before believing the result.** A string
+   replacement that matches nothing reports a clean pass and proves nothing --
+   #11 reported three of them, because rustfmt had split the target across lines
+   and a later attempt matched the same identifier in a different table. Print
+   the mutated line, or assert the replacement happened.
+
+   The cross-model review checks test *validity* at the gate -- vacuous assertions, dead branches, fixtures that
    prove nothing -- but not until then, so do not lean on it here.
-5. **Micro-gate.** Each command as its own top-level command, reading its own
+6. **Micro-gate.** Each command as its own top-level command, reading its own
    exit status. **No pipe, no `head`, no `||` fallback, and never `$?` after a
    later command** -- that produced two false "clean" reports on the first
    ticket through here, both hiding a failure in code written minutes earlier.
@@ -140,13 +162,13 @@ longer exists.
        cargo build --workspace
 
    The full suite waits for the gate. Fix failures now.
-6. **Stage the paths this ticket owns**, not everything:
+7. **Stage the paths this ticket owns**, not everything:
 
        git add -A -- crates/
 
    `git add -A` picks up whatever else you touched. That is how a tooling fix
    got entangled with the first ticket and cost a detour to separate.
-7. Verify the checkboxes the implementer ticked match what the diff contains.
+8. Verify the checkboxes the implementer ticked match what the diff contains.
 
 **Adapt.** Clean batch, grow the next. Heavy corrections, shrink it and spell out
 the pattern in the notes. If the implementer keeps reintroducing something you
@@ -157,6 +179,12 @@ summary note rebuilds context faster than arguing.
 ledger and fix it after this ticket's PR is open, on its own branch. Interleaving
 the two costs more than the delay, and a squash merge would put two unrelated
 things in one commit.
+
+The same holds for a workflow lesson the gate wants promoted: `baton-gate` step
+4 writes the `DECISIONS.md` entry in the ticket's branch, because `docs/` is
+untracked, and leaves anything tracked as a patch for the follow-up branch. If
+the two ever read as though they disagree, this is the one that is right --
+**a ticket's commit contains that ticket's code.**
 
 ### 4. Final pass
 

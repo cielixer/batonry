@@ -18,9 +18,15 @@ directory and adding one would create a second source of truth.
 ## Before anything
 
 Read `CLAUDE.md`. Not skimmed -- it is the implementation contract, and its
-section 6 lists eleven architecture rules whose violation means the work gets
+section 4 lists eleven architecture rules whose violation means the work gets
 redone. Design that ignores it produces plans that fail review before they fail
 tests.
+
+Then read the crate contract for whichever crate is likely to own this work.
+`baton-action`, `baton-ui`, `baton-ssh`, `baton-store` and `baton-term` each have
+a `CLAUDE.md` of their own, indexed in the root's section 1. Deciding which crate
+owns a piece of work is phase 1's job, and it cannot be done well without the
+rules that crate carries.
 
 Then check what already exists:
 
@@ -38,7 +44,7 @@ Then check what already exists:
 2. **Find the constraints that already exist.** Which of A1-A11 does this touch?
    Which crate owns it, given that `baton-core` has no UI or I/O, `baton-action`
    does not know `iced` exists, and `baton-term` does not know `baton-core`
-   exists? Which performance floor in section 9 applies?
+   exists? Which performance floor in section 6 applies?
 3. **Consider at least two shapes**, and write down why the loser lost. This is
    the single highest-value artifact of the phase: in six weeks the question
    will be "why is it like this", and the answer needs to exist somewhere.

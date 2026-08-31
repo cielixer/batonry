@@ -7,32 +7,28 @@
 use std::borrow::Cow;
 
 use baton_action::{
-    BUILT_IN, Binding, DIALOG_HOSTKEY_CHANGED, DIALOG_HOSTKEY_NEW, DIALOG_OPEN,
-    EDITING_TEXT, Flags, HAS_JUMP, HAS_QUEUED_INPUT, HAS_SELECTION,
-    HOST_SELECTED, Keymap, Keystroke, NONE, PALETTE_OPEN, PANE_DISCONNECTED,
-    PANE_FOCUSED, PANE_LIVE, SCRATCH_ACTIVE, SEARCH_OPEN, SIDEBAR_HOSTS,
-    SIDEBAR_WORKSPACES, WORKSPACE_ACTIVE, assemble, combine, merge,
+    BUILT_IN, Binding, Flags, Keymap, Keystroke, assemble, combine, merge,
 };
 
-/// Every flag except `PANE_FOCUSED`. Named for what it leaves out, because a
+/// Every flag except `Flags::PANE_FOCUSED`. Named for what it leaves out, because a
 /// test that wants all of them has to say so.
 const EVERY_FLAG_BUT_FOCUS: [Flags; 16] = [
-    PANE_LIVE,
-    PANE_DISCONNECTED,
-    HAS_SELECTION,
-    SEARCH_OPEN,
-    PALETTE_OPEN,
-    DIALOG_OPEN,
-    EDITING_TEXT,
-    SIDEBAR_HOSTS,
-    SIDEBAR_WORKSPACES,
-    HOST_SELECTED,
-    SCRATCH_ACTIVE,
-    WORKSPACE_ACTIVE,
-    HAS_JUMP,
-    HAS_QUEUED_INPUT,
-    DIALOG_HOSTKEY_NEW,
-    DIALOG_HOSTKEY_CHANGED,
+    Flags::PANE_LIVE,
+    Flags::PANE_DISCONNECTED,
+    Flags::HAS_SELECTION,
+    Flags::SEARCH_OPEN,
+    Flags::PALETTE_OPEN,
+    Flags::DIALOG_OPEN,
+    Flags::EDITING_TEXT,
+    Flags::SIDEBAR_HOSTS,
+    Flags::SIDEBAR_WORKSPACES,
+    Flags::HOST_SELECTED,
+    Flags::SCRATCH_ACTIVE,
+    Flags::WORKSPACE_ACTIVE,
+    Flags::HAS_JUMP,
+    Flags::HAS_QUEUED_INPUT,
+    Flags::DIALOG_HOSTKEY_NEW,
+    Flags::DIALOG_HOSTKEY_CHANGED,
 ];
 
 fn built_in() -> Keymap {
@@ -40,7 +36,9 @@ fn built_in() -> Keymap {
 }
 
 fn ctx(flags: &[Flags]) -> Flags {
-    flags.iter().fold(NONE, |set, flag| combine(set, *flag))
+    flags
+        .iter()
+        .fold(Flags::NONE, |set, flag| combine(set, *flag))
 }
 
 fn chord(s: &str) -> Keystroke {
@@ -74,8 +72,8 @@ fn every_binding_is_reachable_after_assembly() {
     let all = combine(
         EVERY_FLAG_BUT_FOCUS
             .iter()
-            .fold(NONE, |set, f| combine(set, *f)),
-        PANE_FOCUSED,
+            .fold(Flags::NONE, |set, f| combine(set, *f)),
+        Flags::PANE_FOCUSED,
     );
 
     for binding in baton_action::DEFAULT_KEYMAP {
@@ -85,7 +83,7 @@ fn every_binding_is_reachable_after_assembly() {
             .unwrap_or_else(|| panic!("{} is not registered", binding.action));
 
         let reached = keymap.lookup(chord, all) == Some(want)
-            || keymap.lookup(chord, NONE) == Some(want);
+            || keymap.lookup(chord, Flags::NONE) == Some(want);
         assert!(
             reached,
             "{} on {} is in the table but no context reaches it; its guard is \
@@ -106,16 +104,19 @@ fn a_failing_condition_hands_the_keystroke_back() {
         .expect("term.copy is registered");
 
     assert_eq!(
-        keymap.lookup(chord("meta+KeyC"), ctx(&[PANE_FOCUSED, HAS_SELECTION])),
+        keymap.lookup(
+            chord("meta+KeyC"),
+            ctx(&[Flags::PANE_FOCUSED, Flags::HAS_SELECTION])
+        ),
         Some(copy)
     );
     assert_eq!(
-        keymap.lookup(chord("meta+KeyC"), ctx(&[PANE_FOCUSED])),
+        keymap.lookup(chord("meta+KeyC"), ctx(&[Flags::PANE_FOCUSED])),
         None,
         "without a selection this must fall through to the PTY"
     );
     assert_eq!(
-        keymap.lookup(chord("meta+KeyC"), ctx(&[HAS_SELECTION])),
+        keymap.lookup(chord("meta+KeyC"), ctx(&[Flags::HAS_SELECTION])),
         None,
         "a selection the keyboard is not pointed at is not this copy's"
     );
@@ -130,7 +131,10 @@ fn an_unconditional_binding_always_matches() {
         .resolve("app.quit")
         .expect("app.quit is registered");
 
-    for context in [NONE, ctx(&[EDITING_TEXT, PALETTE_OPEN])] {
+    for context in [
+        Flags::NONE,
+        ctx(&[Flags::EDITING_TEXT, Flags::PALETTE_OPEN]),
+    ] {
         assert_eq!(keymap.lookup(chord("meta+KeyQ"), context), Some(quit));
     }
 }
@@ -141,7 +145,7 @@ fn an_unbound_chord_resolves_to_nothing() {
     let keymap = built_in();
     for unbound in ["meta+KeyZ", "control+KeyC", "F5", "KeyA"] {
         assert_eq!(
-            keymap.lookup(chord(unbound), NONE),
+            keymap.lookup(chord(unbound), Flags::NONE),
             None,
             "{unbound} is not in the table and must not resolve"
         );
@@ -172,12 +176,12 @@ fn editing_text_kills_a_bare_key_that_produces_text() {
     ] {
         let action = registry.resolve(id).unwrap();
         assert_eq!(
-            keymap.lookup(chord(key), NONE),
+            keymap.lookup(chord(key), Flags::NONE),
             Some(action),
             "{key} must work when no field has focus"
         );
         assert_eq!(
-            keymap.lookup(chord(key), ctx(&[EDITING_TEXT])),
+            keymap.lookup(chord(key), ctx(&[Flags::EDITING_TEXT])),
             None,
             "{key} must reach the field instead of firing {id}"
         );
@@ -194,7 +198,7 @@ fn editing_text_kills_a_bare_key_that_produces_text() {
 fn editing_text_leaves_the_keys_a_palette_needs_alive() {
     let keymap = built_in();
     let registry = merge(&[BUILT_IN]);
-    let editing = ctx(&[EDITING_TEXT, PALETTE_OPEN]);
+    let editing = ctx(&[Flags::EDITING_TEXT, Flags::PALETTE_OPEN]);
 
     for (key, id) in [
         ("Escape", "palette.close"),
@@ -225,7 +229,8 @@ fn pasting_into_the_palette_does_not_reach_the_pane() {
     let paste = registry.resolve("term.paste").unwrap();
 
     // Typing in the palette, with a live pane behind it.
-    let typing = ctx(&[EDITING_TEXT, PALETTE_OPEN, PANE_LIVE]);
+    let typing =
+        ctx(&[Flags::EDITING_TEXT, Flags::PALETTE_OPEN, Flags::PANE_LIVE]);
     assert_eq!(
         keymap.lookup(chord("meta+KeyV"), typing),
         None,
@@ -233,7 +238,7 @@ fn pasting_into_the_palette_does_not_reach_the_pane() {
     );
 
     // With the pane focused instead, it is the pane's paste again.
-    let at_the_pane = ctx(&[PANE_FOCUSED, PANE_LIVE]);
+    let at_the_pane = ctx(&[Flags::PANE_FOCUSED, Flags::PANE_LIVE]);
     assert_eq!(keymap.lookup(chord("meta+KeyV"), at_the_pane), Some(paste));
 }
 
@@ -253,11 +258,11 @@ fn editing_text_also_yields_the_editing_keys() {
 
     for key in ["Backspace", "ArrowLeft", "Home"] {
         assert!(
-            keymap.lookup(chord(key), NONE).is_some(),
+            keymap.lookup(chord(key), Flags::NONE).is_some(),
             "{key} must work when no field has focus"
         );
         assert_eq!(
-            keymap.lookup(chord(key), ctx(&[EDITING_TEXT])),
+            keymap.lookup(chord(key), ctx(&[Flags::EDITING_TEXT])),
             None,
             "{key} must reach the field"
         );
@@ -282,7 +287,7 @@ fn no_terminal_action_fires_without_the_pane_focused() {
     // here is a guard that does not mention focus.
     let everything_but_focus = EVERY_FLAG_BUT_FOCUS
         .iter()
-        .fold(NONE, |set, f| combine(set, *f));
+        .fold(Flags::NONE, |set, f| combine(set, *f));
 
     for binding in baton_action::DEFAULT_KEYMAP {
         let key = chord(&binding.key);
@@ -310,7 +315,7 @@ fn a_modifier_exempts_a_key_from_the_rule() {
     let quit = registry.resolve("app.quit").unwrap();
 
     assert_eq!(
-        keymap.lookup(chord("meta+KeyQ"), ctx(&[EDITING_TEXT])),
+        keymap.lookup(chord("meta+KeyQ"), ctx(&[Flags::EDITING_TEXT])),
         Some(quit)
     );
 }

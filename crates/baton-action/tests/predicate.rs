@@ -2,10 +2,7 @@
 
 use std::str::FromStr;
 
-use baton_action::{
-    EDITING_TEXT, Flags, NONE, PALETTE_OPEN, PANE_FOCUSED, Predicate,
-    PredicateError, combine, evaluate,
-};
+use baton_action::{Flags, Predicate, PredicateError, combine, evaluate};
 
 fn parse(s: &str) -> Predicate {
     Predicate::from_str(s)
@@ -13,28 +10,36 @@ fn parse(s: &str) -> Predicate {
 }
 
 fn ctx(flags: &[Flags]) -> Flags {
-    flags.iter().fold(NONE, |set, flag| combine(set, *flag))
+    flags
+        .iter()
+        .fold(Flags::NONE, |set, flag| combine(set, *flag))
 }
 
 /// The four operators mean what they say, against a context built by hand.
 #[test]
 fn the_operators_evaluate() {
-    let open = ctx(&[PALETTE_OPEN]);
-    let both = ctx(&[PALETTE_OPEN, EDITING_TEXT]);
+    let open = ctx(&[Flags::PALETTE_OPEN]);
+    let both = ctx(&[Flags::PALETTE_OPEN, Flags::EDITING_TEXT]);
 
     assert!(evaluate(&parse("palette_open"), open));
-    assert!(!evaluate(&parse("palette_open"), NONE));
-    assert!(evaluate(&parse("!palette_open"), NONE));
+    assert!(!evaluate(&parse("palette_open"), Flags::NONE));
+    assert!(evaluate(&parse("!palette_open"), Flags::NONE));
 
     assert!(evaluate(&parse("palette_open && editing_text"), both));
     assert!(!evaluate(&parse("palette_open && editing_text"), open));
 
     assert!(evaluate(&parse("palette_open || editing_text"), open));
-    assert!(!evaluate(&parse("palette_open || editing_text"), NONE));
+    assert!(!evaluate(
+        &parse("palette_open || editing_text"),
+        Flags::NONE
+    ));
 
     // `==` is truth-value equality, so two false operands are equal.
     assert!(evaluate(&parse("palette_open == editing_text"), both));
-    assert!(evaluate(&parse("palette_open == editing_text"), NONE));
+    assert!(evaluate(
+        &parse("palette_open == editing_text"),
+        Flags::NONE
+    ));
     assert!(!evaluate(&parse("palette_open == editing_text"), open));
 }
 
@@ -43,9 +48,9 @@ fn the_operators_evaluate() {
 /// evaluate correctly is not a bug worth failing on.
 #[test]
 fn precedence_binds_the_way_the_grammar_says() {
-    let a = PALETTE_OPEN;
-    let b = EDITING_TEXT;
-    let c = PANE_FOCUSED;
+    let a = Flags::PALETTE_OPEN;
+    let b = Flags::EDITING_TEXT;
+    let c = Flags::PANE_FOCUSED;
 
     // `a || b && c` is `a || (b && c)`: true on `a` alone.
     let clause = parse("palette_open || editing_text && pane_focused");

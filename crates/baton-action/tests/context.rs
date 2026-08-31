@@ -2,38 +2,11 @@
 
 use std::str::FromStr;
 
-use baton_action::{
-    DIALOG_HOSTKEY_CHANGED, DIALOG_HOSTKEY_NEW, DIALOG_OPEN, EDITING_TEXT,
-    Flag, Flags, HAS_JUMP, HAS_QUEUED_INPUT, HAS_SELECTION, HOST_SELECTED,
-    NONE, PALETTE_OPEN, PANE_DISCONNECTED, PANE_FOCUSED, PANE_LIVE,
-    SCRATCH_ACTIVE, SEARCH_OPEN, SIDEBAR_HOSTS, SIDEBAR_WORKSPACES,
-    UnknownFlag, WORKSPACE_ACTIVE, combine, holds,
-};
+use baton_action::{Flag, Flags, UnknownFlag, combine, holds};
 
-/// Every flag, written out here rather than read from the crate.
-///
-/// A test that iterates the same table the code iterates asserts nothing. This
-/// list is the specification (`ux/interactions.md` section 2) transcribed by
-/// hand, so adding a flag without adding it here fails.
-const EVERY: [(Flags, &str); 17] = [
-    (PANE_FOCUSED, "pane_focused"),
-    (PANE_LIVE, "pane_live"),
-    (PANE_DISCONNECTED, "pane_disconnected"),
-    (HAS_SELECTION, "has_selection"),
-    (SEARCH_OPEN, "search_open"),
-    (PALETTE_OPEN, "palette_open"),
-    (DIALOG_OPEN, "dialog_open"),
-    (EDITING_TEXT, "editing_text"),
-    (SIDEBAR_HOSTS, "sidebar_hosts"),
-    (SIDEBAR_WORKSPACES, "sidebar_workspaces"),
-    (HOST_SELECTED, "host_selected"),
-    (SCRATCH_ACTIVE, "scratch_active"),
-    (WORKSPACE_ACTIVE, "workspace_active"),
-    (HAS_JUMP, "has_jump"),
-    (HAS_QUEUED_INPUT, "has_queued_input"),
-    (DIALOG_HOSTKEY_NEW, "dialog_hostkey_new"),
-    (DIALOG_HOSTKEY_CHANGED, "dialog_hostkey_changed"),
-];
+mod common;
+
+use common::EVERY_FLAG as EVERY;
 
 #[test]
 fn every_name_parses_to_itself_and_prints_back() {
@@ -89,7 +62,7 @@ fn a_parsed_name_holds_exactly_one_flag() {
         let others = EVERY
             .iter()
             .filter(|(f, _)| *f != flag)
-            .fold(NONE, |set, (f, _)| combine(set, *f));
+            .fold(Flags::NONE, |set, (f, _)| combine(set, *f));
         assert!(
             !holds(others, flag),
             "{spelling} shares a bit with another flag"
@@ -139,7 +112,7 @@ fn a_leaf_holds_exactly_the_one_condition_it_names() {
 #[test]
 fn each_flag_occupies_its_own_bit() {
     for (i, (flag, spelling)) in EVERY.iter().enumerate() {
-        let only = combine(NONE, *flag);
+        let only = combine(Flags::NONE, *flag);
         assert!(holds(only, *flag), "{spelling} does not hold itself");
 
         for (j, (other, other_spelling)) in EVERY.iter().enumerate() {
@@ -157,10 +130,15 @@ fn each_flag_occupies_its_own_bit() {
 #[test]
 fn the_empty_set_holds_nothing_and_accumulates() {
     for (flag, spelling) in EVERY {
-        assert!(!holds(NONE, flag), "the empty set reports {spelling}");
+        assert!(
+            !holds(Flags::NONE, flag),
+            "the empty set reports {spelling}"
+        );
     }
 
-    let full = EVERY.iter().fold(NONE, |set, (f, _)| combine(set, *f));
+    let full = EVERY
+        .iter()
+        .fold(Flags::NONE, |set, (f, _)| combine(set, *f));
     for (flag, spelling) in EVERY {
         assert!(holds(full, flag), "a full set lost {spelling}");
     }
@@ -170,43 +148,61 @@ fn the_empty_set_holds_nothing_and_accumulates() {
 /// `const` and shared.
 #[test]
 fn combine_is_a_value_and_leaves_its_input_alone() {
-    const BASE: Flags = combine(NONE, PALETTE_OPEN);
-    const BOTH: Flags = combine(BASE, EDITING_TEXT);
+    const BASE: Flags = combine(Flags::NONE, Flags::PALETTE_OPEN);
+    const BOTH: Flags = combine(BASE, Flags::EDITING_TEXT);
 
-    assert!(holds(BASE, PALETTE_OPEN));
-    assert!(!holds(BASE, EDITING_TEXT), "combine mutated its input");
-    assert!(holds(BOTH, PALETTE_OPEN) && holds(BOTH, EDITING_TEXT));
+    assert!(holds(BASE, Flags::PALETTE_OPEN));
+    assert!(
+        !holds(BASE, Flags::EDITING_TEXT),
+        "combine mutated its input"
+    );
+    assert!(
+        holds(BOTH, Flags::PALETTE_OPEN) && holds(BOTH, Flags::EDITING_TEXT)
+    );
 
     // Adding a flag twice is the same value: this is a set, not a counter.
-    assert_eq!(combine(BOTH, EDITING_TEXT), BOTH);
+    assert_eq!(combine(BOTH, Flags::EDITING_TEXT), BOTH);
 }
 
-/// **`NONE` is a value to build a set from, never one to ask about.** Every set
-/// contains it, so `holds(anything, NONE)` is `true` -- including for a set that
-/// holds a great deal. The question "does this hold nothing?" is `== NONE`.
+/// **`Flags::NONE` is a value to build a set from, never one to ask about.** Every set
+/// contains it, so `holds(anything, Flags::NONE)` is `true` -- including for a set that
+/// holds a great deal. The question "does this hold nothing?" is `== Flags::NONE`.
 ///
 /// Pinned so the obvious "fix" is not made: special-casing the empty set inside
 /// `holds` would make it something other than containment.
 #[test]
 fn the_empty_set_is_a_value_and_not_a_query() {
-    let busy = combine(combine(NONE, PALETTE_OPEN), EDITING_TEXT);
+    let busy = combine(
+        combine(Flags::NONE, Flags::PALETTE_OPEN),
+        Flags::EDITING_TEXT,
+    );
 
-    assert!(holds(busy, NONE), "every set contains the empty set");
-    assert!(holds(NONE, NONE));
-    assert_ne!(busy, NONE, "and containment is not the way to ask");
-    assert_eq!(NONE, NONE);
+    assert!(holds(busy, Flags::NONE), "every set contains the empty set");
+    assert!(holds(Flags::NONE, Flags::NONE));
+    assert_ne!(busy, Flags::NONE, "and containment is not the way to ask");
+    assert_eq!(Flags::NONE, Flags::NONE);
+}
+
+/// `Default` is the named empty set, not incidentally the integer's zero.
+///
+/// The macro generates `default()` as `Flags::NONE`, so the hazard note on the
+/// constant covers the anonymous spelling too. Pinned here because a derive
+/// would satisfy this equality only by coincidence of `u32::default()`.
+#[test]
+fn the_default_is_the_named_empty_set() {
+    assert_eq!(Flags::default(), Flags::NONE);
 }
 
 /// `holds` asks about every flag in its second argument, so a set answers for a
 /// combination as readily as for one flag.
 #[test]
 fn holds_asks_about_all_of_what_it_is_given() {
-    let typing = combine(PALETTE_OPEN, EDITING_TEXT);
-    let both = combine(PALETTE_OPEN, EDITING_TEXT);
+    let typing = combine(Flags::PALETTE_OPEN, Flags::EDITING_TEXT);
+    let both = combine(Flags::PALETTE_OPEN, Flags::EDITING_TEXT);
 
     assert!(holds(typing, both));
     assert!(
-        !holds(combine(NONE, PALETTE_OPEN), both),
+        !holds(combine(Flags::NONE, Flags::PALETTE_OPEN), both),
         "one of two is not both"
     );
 }

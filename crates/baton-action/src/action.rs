@@ -23,12 +23,19 @@ use crate::bitset::bitset;
 /// click never calls a function directly, but nobody hunts for it in a palette
 /// -- it carries `CLICK` without `PALETTE`.
 ///
-/// The empty set is [`KEY_ONLY`]; read its note before using it in a comparison.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+/// The empty set is [`Channels::KEY_ONLY`]; read its note before using it in a comparison.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[repr(transparent)]
 pub struct Channels(u8);
 
-bitset!(Channels, reachable_from, union:
+bitset!(Channels, reachable_from, union,
+    /// No non-key surface. Every action carrying this is reached by a key instead,
+    /// which a test in the keymap suite asserts row by row.
+    ///
+    /// **A value to build a row with, never one to ask about.** It is the empty set,
+    /// so [`reachable_from`]`(anything, KEY_ONLY)` is `true`, `PALETTE` included.
+    /// "Does this reach nothing?" is `set == KEY_ONLY`.
+    KEY_ONLY:
     /// The command palette.
     PALETTE,
     /// A direct click on something.
@@ -38,14 +45,6 @@ bitset!(Channels, reachable_from, union:
     /// A drag gesture.
     DRAG,
 );
-/// No non-key surface. Every action carrying this is reached by a key instead,
-/// which a test in the keymap suite asserts row by row.
-///
-/// **A value to build a row with, never one to ask about.** It is the empty set,
-/// so [`reachable_from`]`(anything, KEY_ONLY)` is `true`, `PALETTE` included.
-/// "Does this reach nothing?" is `set == KEY_ONLY`.
-pub const KEY_ONLY: Channels = Channels(0);
-
 /// The shape of the argument an action expects.
 ///
 /// A shape and not a type, because this crate does not depend on `baton-core`
@@ -93,20 +92,4 @@ pub struct Action {
     pub channels: Channels,
     /// The argument shape this expects.
     pub arg: ArgShape,
-}
-
-/// One way to reach one action.
-///
-/// `when` stays opaque here. It is a guard on the *binding*, so what it decides
-/// is whether a keystroke becomes an action at all or falls through to whatever
-/// the input router is pointed at -- not whether an action is greyed out.
-/// Parsing and evaluating it belongs to whoever owns the context it names.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Binding {
-    /// The id of the action this reaches. Joins to a registry.
-    pub action: Cow<'static, str>,
-    /// The chord's canonical ASCII spelling, parseable by [`crate::Keystroke`].
-    pub key: Cow<'static, str>,
-    /// An opaque condition. Empty means the binding always applies.
-    pub when: Option<Cow<'static, str>>,
 }

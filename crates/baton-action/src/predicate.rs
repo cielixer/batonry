@@ -9,6 +9,7 @@
 use std::fmt;
 use std::str::FromStr;
 
+use crate::context::{assignments, excludes};
 use crate::{Flag, Flags, UnknownFlag, holds};
 
 /// A parsed `when` clause.
@@ -303,4 +304,24 @@ impl fmt::Display for Predicate {
             },
         }
     }
+}
+
+/// A context in which both predicates hold, if any exists.
+///
+/// Sweeps every assignment of the flags -- all `2^17` of them, which a test
+/// pays in milliseconds -- skipping assignments that violate `exclusive`
+/// ("at most one of these holds", see [`Flags::EXCLUSIVE`](crate::Flags::EXCLUSIVE)), and returns the
+/// first satisfying context. Exhaustive on purpose: the honest options were
+/// this or a solver, and the sweep is the one that is easy to trust.
+///
+/// Analysis over the language, not part of it: the grammar stays five node
+/// kinds and four operators.
+pub fn satisfiable_together(
+    a: &Predicate,
+    b: &Predicate,
+    exclusive: &[Flags],
+) -> Option<Flags> {
+    assignments()
+        .filter(|ctx| !excludes(*ctx, exclusive))
+        .find(|ctx| evaluate(a, *ctx) && evaluate(b, *ctx))
 }

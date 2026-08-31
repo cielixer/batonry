@@ -13,55 +13,93 @@ use crate::bitset::bitset;
 /// this crate stays unaware that a UI toolkit exists.
 ///
 /// **A set can hold anything, including what the domain does not have.** Seen
-/// once already with `Channels`: [`NONE`] is contained by every set, so
-/// `holds(anything, NONE)` is `true`, which makes it a value to build a set
+/// once already with `Channels`: [`Flags::NONE`] is contained by every set, so
+/// `holds(anything, Flags::NONE)` is `true`, which makes it a value to build a set
 /// from and never one to ask about.
 ///
 /// That is also why a set is not what a clause's leaf holds. A leaf names one
 /// condition, and [`Flag`] is the checked type that carries it.
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Flags(u32);
 
-bitset!(Flags, holds, combine, NAMES:
+bitset!(Flags, holds, combine, NAMES,
+    /// Nothing holds. A value to start a set from, never one to ask about.
+    NONE:
     /// A terminal pane has focus.
-    PANE_FOCUSED = "pane_focused",
+    PANE_FOCUSED,
     /// That pane is in the `live` state.
-    PANE_LIVE = "pane_live",
+    PANE_LIVE,
     /// That pane is in the `failed` or `reconnecting` state.
-    PANE_DISCONNECTED = "pane_disconnected",
+    PANE_DISCONNECTED,
     /// The terminal has a selection.
-    HAS_SELECTION = "has_selection",
+    HAS_SELECTION,
     /// The terminal's search bar is open.
-    SEARCH_OPEN = "search_open",
+    SEARCH_OPEN,
     /// The command palette is open.
-    PALETTE_OPEN = "palette_open",
+    PALETTE_OPEN,
     /// A modal is open, such as host editing or a confirmation.
-    DIALOG_OPEN = "dialog_open",
+    DIALOG_OPEN,
     /// A text input has focus: a dialog field, the palette's query, renaming.
-    EDITING_TEXT = "editing_text",
+    EDITING_TEXT,
     /// The sidebar is in hosts mode.
-    SIDEBAR_HOSTS = "sidebar_hosts",
+    SIDEBAR_HOSTS,
     /// The sidebar is in workspaces mode.
-    SIDEBAR_WORKSPACES = "sidebar_workspaces",
+    SIDEBAR_WORKSPACES,
     /// A host card is selected in the sidebar.
-    HOST_SELECTED = "host_selected",
+    HOST_SELECTED,
     /// What is on screen is a scratch.
-    SCRATCH_ACTIVE = "scratch_active",
+    SCRATCH_ACTIVE,
     /// What is on screen is a named workspace.
-    WORKSPACE_ACTIVE = "workspace_active",
+    WORKSPACE_ACTIVE,
     /// That host has a jump path configured.
-    HAS_JUMP = "has_jump",
+    HAS_JUMP,
     /// Keys typed while the connection was down are still queued.
-    HAS_QUEUED_INPUT = "has_queued_input",
+    HAS_QUEUED_INPUT,
     /// The modal confirming a host key seen for the first time is open.
-    DIALOG_HOSTKEY_NEW = "dialog_hostkey_new",
+    DIALOG_HOSTKEY_NEW,
     /// The modal confirming a **changed** host key is open.
-    DIALOG_HOSTKEY_CHANGED = "dialog_hostkey_changed",
+    DIALOG_HOSTKEY_CHANGED,
 );
 
-/// Nothing holds. A value to start a set from, never one to ask about.
-pub const NONE: Flags = Flags(0);
+impl Flags {
+    /// Groups of conditions of which **at most one** can hold at a time.
+    ///
+    /// The conflict checker (#12) trusts these blindly: an assignment that
+    /// holds two members of one group is skipped as impossible, so a group
+    /// belongs here only when the specification actually promises it -- a
+    /// wrong entry hides real collisions. "At most one" says nothing about a
+    /// whole group being false; that case stays possible on purpose (a
+    /// collapsed sidebar, a pane in neither state).
+    pub const EXCLUSIVE: &'static [Flags] = &[
+        // The sidebar is in one mode.
+        combine(Flags::SIDEBAR_HOSTS, Flags::SIDEBAR_WORKSPACES),
+        // States of one pane: live, or failed/reconnecting.
+        combine(Flags::PANE_LIVE, Flags::PANE_DISCONNECTED),
+        // What is on screen is one thing: a scratch or a named workspace.
+        combine(Flags::SCRATCH_ACTIVE, Flags::WORKSPACE_ACTIVE),
+        // One host-key modal at a time.
+        combine(Flags::DIALOG_HOSTKEY_NEW, Flags::DIALOG_HOSTKEY_CHANGED),
+    ];
+}
+
+/// Whether `ctx` holds two or more members of any of `groups`.
+pub(crate) const fn excludes(ctx: Flags, groups: &[Flags]) -> bool {
+    let mut i = 0;
+    while i < groups.len() {
+        if (ctx.0 & groups[i].0).count_ones() >= 2 {
+            return true;
+        }
+        i += 1;
+    }
+    false
+}
+
+/// Every assignment of the conditions at once, for the exhaustive sweep.
+/// Crate-private: outside callers build sets from the named constants.
+pub(crate) fn assignments() -> impl Iterator<Item = Flags> {
+    (0..(1u32 << Flags::NAMES.len())).map(Flags)
+}
 
 /// Exactly one condition: what a clause's leaf names.
 ///
@@ -109,8 +147,8 @@ impl FromStr for Flag {
     /// referring to it parse today and mean nothing.
     fn from_str(name: &str) -> Result<Self, Self::Err> {
         let mut index = 0;
-        while index < NAMES.len() {
-            let (flag, spelling) = NAMES[index];
+        while index < Flags::NAMES.len() {
+            let (flag, spelling) = Flags::NAMES[index];
             if spelling.as_bytes() == name.as_bytes() {
                 return Ok(Flag(flag));
             }
@@ -125,7 +163,7 @@ impl FromStr for Flag {
 impl fmt::Display for Flag {
     /// The one name, always. Total because the value holds exactly one bit.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for (flag, spelling) in NAMES {
+        for (flag, spelling) in Flags::NAMES {
             if holds(self.0, *flag) {
                 return f.write_str(spelling);
             }

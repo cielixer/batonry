@@ -24,7 +24,7 @@
 //! - **[`Channels`]** -- where an action can be invoked *other than by a key*:
 //!   palette, click, menu, drag. There is no `KEY` bit, because key reachability
 //!   is whatever the keymap says and changes when someone rebinds. The empty set
-//!   is [`KEY_ONLY`], and it is a value to build a row with rather than one to
+//!   is [`Channels::KEY_ONLY`], and it is a value to build a row with rather than one to
 //!   ask about: every set contains it.
 //! - **[`ArgShape`]** -- what an action expects beside its id: a host, a pane, a
 //!   tab position. A shape and not a type, because this crate cannot name
@@ -62,9 +62,9 @@
 //!   vocabulary is **closed**, so a misspelling is refused rather than becoming
 //!   a clause that is quietly false and disables a key with no diagnosis.
 //!   Whoever owns the UI state fills it; this crate only reads it, which is how
-//!   the condition language stays unaware that a UI toolkit exists. [`NONE`] is
+//!   the condition language stays unaware that a UI toolkit exists. [`Flags::NONE`] is
 //!   a value to build a set from and never one to ask about: every set contains
-//!   it, so `holds(anything, NONE)` is `true`.
+//!   it, so `holds(anything, Flags::NONE)` is `true`.
 //! - **[`Flag`]** -- exactly one condition, which is what a clause's leaf names.
 //!   A set holds none or several as readily as one and a leaf can hold neither,
 //!   so parsing a name is the only way to build one and its field is private.
@@ -79,8 +79,18 @@
 //!   rather than deferring the failure to the keystroke that hits the bad row.
 //!   Its rows are not public: what a caller asks is `lookup`, and what it gets
 //!   back is an [`ActionId`] it can publish.
+//! - **[`Conflict`]** -- two bindings on one chord whose conditions can hold
+//!   together, under the declared exclusivities. Never resolved by priority:
+//!   a conflict is a bug in the keymap and the fix is to change a key.
+//!   [`Keymap::conflicts`] finds them by exhaustive sweep
+//!   ([`satisfiable_together`]), and a test asserting the built-in table has
+//!   none is what makes a collision a red build.
+//! - **Exclusive groups ([`Flags::EXCLUSIVE`])** -- sets of conditions of which at
+//!   most one can hold, declared in one place because the conflict checker
+//!   trusts them blindly: without them `sidebar_hosts && sidebar_workspaces`
+//!   would read as satisfiable and every such pair would be a false collision.
 //! - **Suppression while editing** -- the one rule that is global rather than
-//!   written per binding. While [`EDITING_TEXT`] holds, a binding on a bare
+//!   written per binding. While [`Flags::EDITING_TEXT`] holds, a binding on a bare
 //!   key that a text input *consumes* is suppressed: the character keys, Space,
 //!   Backspace, Delete, Home, End, and the left and right arrows. So typing `q`
 //!   into a field cannot quit the app, and Backspace reaches the field rather
@@ -118,20 +128,13 @@ mod keystroke;
 mod predicate;
 mod registry;
 
-pub use action::{
-    Action, ArgShape, Binding, CLICK, Channels, DRAG, KEY_ONLY, MENU, PALETTE,
-    reachable_from, union,
-};
+pub use action::{Action, ArgShape, Channels, reachable_from, union};
 pub use catalog::{ACTIONS, BUILT_IN, DEFAULT_KEYMAP};
-pub use context::{
-    DIALOG_HOSTKEY_CHANGED, DIALOG_HOSTKEY_NEW, DIALOG_OPEN, EDITING_TEXT,
-    Flag, Flags, HAS_JUMP, HAS_QUEUED_INPUT, HAS_SELECTION, HOST_SELECTED,
-    NONE, PALETTE_OPEN, PANE_DISCONNECTED, PANE_FOCUSED, PANE_LIVE,
-    SCRATCH_ACTIVE, SEARCH_OPEN, SIDEBAR_HOSTS, SIDEBAR_WORKSPACES,
-    UnknownFlag, WORKSPACE_ACTIVE, combine, holds,
+pub use context::{Flag, Flags, UnknownFlag, combine, holds};
+pub use keymap::{Binding, Conflict, Keymap, assemble};
+pub use predicate::{
+    Predicate, PredicateError, evaluate, satisfiable_together,
 };
-pub use keymap::{Keymap, assemble};
-pub use predicate::{Predicate, PredicateError, evaluate};
 
 pub use keystroke::{Keystroke, KeystrokeError};
 pub use registry::{ActionId, Registry, Source, merge};

@@ -4,10 +4,28 @@ use std::collections::HashMap;
 
 use keyboard_types::{Code, Modifiers};
 
+use std::borrow::Cow;
+
 use crate::{
-    ActionId, Binding, EDITING_TEXT, Flags, Keystroke, Predicate, Registry,
-    evaluate, holds,
+    ActionId, Flags, Keystroke, Predicate, Registry, evaluate, holds,
+    satisfiable_together,
 };
+
+/// One way to reach one action.
+///
+/// `when` stays opaque here. It is a guard on the *binding*, so what it decides
+/// is whether a keystroke becomes an action at all or falls through to whatever
+/// the input router is pointed at -- not whether an action is greyed out.
+/// Parsing and evaluating it belongs to whoever owns the context it names.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Binding {
+    /// The id of the action this reaches. Joins to a registry.
+    pub action: Cow<'static, str>,
+    /// The chord's canonical ASCII spelling, parseable by [`crate::Keystroke`].
+    pub key: Cow<'static, str>,
+    /// An opaque condition. Empty means the binding always applies.
+    pub when: Option<Cow<'static, str>>,
+}
 
 /// One binding, minus its chord: the chord is the key it is stored under.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -97,9 +115,76 @@ impl Keymap {
     }
 }
 
+/// Two bindings on one chord whose conditions can hold together.
+///
+/// Not resolved by priority, ever: which of the two fires would be decided by
+/// table order, which nobody can predict from a keymap file. A conflict is a
+/// bug in the keymap and the fix is to change a key -- `⌘D` once carried both
+/// "favourite host" and "split vertically", and `host_selected` with
+/// `pane_focused` really are true together.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Conflict {
+    /// The chord both bindings claim.
+    pub chord: Keystroke,
+    /// The first claimant, in table order.
+    pub first: ActionId,
+    /// The second claimant.
+    pub second: ActionId,
+    /// An assignment under which both fire, respecting [`Flags::EXCLUSIVE`].
+    pub context: Flags,
+}
+
+impl Keymap {
+    /// Every pair of same-chord bindings that can both fire.
+    ///
+    /// Satisfiability of the two conditions together is decided by exhaustive
+    /// sweep under the exclusivity assumptions of [`Flags::EXCLUSIVE`]; a binding
+    /// with no condition is satisfied everywhere, so two of those on one
+    /// chord conflict in the empty context. Chords are visited in canonical
+    /// spelling order so the output is stable between runs.
+    ///
+    /// The editing-suppression rule is deliberately not modelled: a pair only
+    /// satisfiable while its chord is suppressed still reports, which
+    /// over-approximates in the safe direction.
+    ///
+    /// Empty means the table is sound. This is what the keymap test asserts,
+    /// and CI runs that test on every pull request.
+    pub fn conflicts(&self) -> Vec<Conflict> {
+        let mut chords: Vec<&Keystroke> = self.by_chord.keys().collect();
+        chords.sort_by_key(|chord| chord.to_string());
+
+        let mut found = Vec::new();
+        for chord in chords {
+            let bound = &self.by_chord[chord];
+            for i in 0..bound.len() {
+                for j in (i + 1)..bound.len() {
+                    let context = match (&bound[i].when, &bound[j].when) {
+                        (None, None) => Some(Flags::NONE),
+                        (Some(p), None) | (None, Some(p)) => {
+                            satisfiable_together(p, p, Flags::EXCLUSIVE)
+                        },
+                        (Some(a), Some(b)) => {
+                            satisfiable_together(a, b, Flags::EXCLUSIVE)
+                        },
+                    };
+                    if let Some(context) = context {
+                        found.push(Conflict {
+                            chord: *chord,
+                            first: bound[i].action,
+                            second: bound[j].action,
+                            context,
+                        });
+                    }
+                }
+            }
+        }
+        found
+    }
+}
+
 /// Whether the global text-editing rule suppresses this binding.
 fn suppressed_while_editing(chord: Keystroke, ctx: Flags) -> bool {
-    holds(ctx, EDITING_TEXT)
+    holds(ctx, Flags::EDITING_TEXT)
         && chord.modifiers == Modifiers::empty()
         && consumed_by_a_text_field(chord.code)
 }
@@ -108,7 +193,7 @@ fn suppressed_while_editing(chord: Keystroke, ctx: Flags) -> bool {
 /// deletes one, and what moves the caret.
 ///
 /// Narrower than "every bare key" on purpose, and the palette is why. Its own
-/// search field sets [`EDITING_TEXT`] while `Escape` closes the palette,
+/// search field sets [`Flags::EDITING_TEXT`] while `Escape` closes the palette,
 /// `Enter` runs the selection and the up and down arrows move through it, so
 /// suppressing every bare key would make the palette impossible to operate.
 /// Left and right are here and up and down are not, for the same reason: a

@@ -20,9 +20,8 @@
 
 use std::borrow::Cow;
 
-use crate::action::{
-    Action, ArgShape, Binding, Channels, KEY_ONLY, MENU, PALETTE, union,
-};
+use crate::action::{Action, ArgShape, Channels, union};
+use crate::keymap::Binding;
 
 use crate::registry::Source;
 
@@ -78,16 +77,24 @@ const fn bind(
 
 /// Actions stage 1 can actually perform.
 pub const ACTIONS: &[Action] = &[
-    act(id::APP_QUIT, "Quit", PALETTE),
-    act(id::PALETTE_OPEN, "Command Palette", KEY_ONLY),
-    act(id::PALETTE_CLOSE, "Close Palette", KEY_ONLY),
-    act(id::PALETTE_CONFIRM, "Run", KEY_ONLY),
-    act(id::PALETTE_NEXT, "Next Result", KEY_ONLY),
-    act(id::PALETTE_PREV, "Previous Result", KEY_ONLY),
-    act(id::TERM_COPY, "Copy", union(PALETTE, MENU)),
-    act(id::TERM_PASTE, "Paste", union(PALETTE, MENU)),
-    act(id::TERM_SELECT_ALL, "Select All", KEY_ONLY),
-    act(id::TERM_CLEAR, "Clear Screen", PALETTE),
+    act(id::APP_QUIT, "Quit", Channels::PALETTE),
+    act(id::PALETTE_OPEN, "Command Palette", Channels::KEY_ONLY),
+    act(id::PALETTE_CLOSE, "Close Palette", Channels::KEY_ONLY),
+    act(id::PALETTE_CONFIRM, "Run", Channels::KEY_ONLY),
+    act(id::PALETTE_NEXT, "Next Result", Channels::KEY_ONLY),
+    act(id::PALETTE_PREV, "Previous Result", Channels::KEY_ONLY),
+    act(
+        id::TERM_COPY,
+        "Copy",
+        union(Channels::PALETTE, Channels::MENU),
+    ),
+    act(
+        id::TERM_PASTE,
+        "Paste",
+        union(Channels::PALETTE, Channels::MENU),
+    ),
+    act(id::TERM_SELECT_ALL, "Select All", Channels::KEY_ONLY),
+    act(id::TERM_CLEAR, "Clear Screen", Channels::PALETTE),
 ];
 
 /// The built-in keymap.

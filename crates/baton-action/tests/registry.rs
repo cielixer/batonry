@@ -18,8 +18,8 @@ use std::borrow::Cow;
 use std::collections::HashSet;
 
 use baton_action::{
-    ACTIONS, Action, ArgShape, BUILT_IN, CLICK, Channels, DRAG, KEY_ONLY, MENU,
-    PALETTE, Source, merge, reachable_from,
+    ACTIONS, Action, ArgShape, BUILT_IN, Channels, Source, merge,
+    reachable_from,
 };
 
 /// The ten ids stage 1 implements. Written out rather than derived from
@@ -93,16 +93,18 @@ fn reachable_carries_ids_a_caller_can_dispatch() {
 
     let by_hand: Vec<&str> = ACTIONS
         .iter()
-        .filter(|a| reachable_from(a.channels, PALETTE))
+        .filter(|a| reachable_from(a.channels, Channels::PALETTE))
         .map(|a| a.id.as_ref())
         .collect();
-    let by_registry: Vec<&str> =
-        r.reachable(PALETTE).map(|(_, a)| a.id.as_ref()).collect();
+    let by_registry: Vec<&str> = r
+        .reachable(Channels::PALETTE)
+        .map(|(_, a)| a.id.as_ref())
+        .collect();
     assert_eq!(by_registry, by_hand, "reachable() is not the same filter");
     assert!(!by_hand.is_empty(), "the fixture would prove nothing");
 
     // Every id it yields addresses the row it came with.
-    for (id, action) in r.reachable(PALETTE) {
+    for (id, action) in r.reachable(Channels::PALETTE) {
         assert_eq!(r.get(id), Some(action), "{} yielded a stale id", action.id);
         assert_eq!(r.resolve(&action.id), Some(id));
     }
@@ -128,10 +130,10 @@ fn iter_is_the_whole_table_in_order() {
 #[test]
 fn each_channel_occupies_its_own_bit() {
     const EVERY: [(Channels, &str); 4] = [
-        (PALETTE, "PALETTE"),
-        (CLICK, "CLICK"),
-        (MENU, "MENU"),
-        (DRAG, "DRAG"),
+        (Channels::PALETTE, "Channels::PALETTE"),
+        (Channels::CLICK, "Channels::CLICK"),
+        (Channels::MENU, "Channels::MENU"),
+        (Channels::DRAG, "Channels::DRAG"),
     ];
 
     for (i, (channel, name)) in EVERY.iter().enumerate() {
@@ -151,13 +153,13 @@ fn each_channel_occupies_its_own_bit() {
     }
 }
 
-/// The palette shows what carries `PALETTE`. If every action carried it, or none
+/// The palette shows what carries `Channels::PALETTE`. If every action carried it, or none
 /// did, the field would be decoration.
 #[test]
 fn channels_distinguish_registry_membership_from_palette_visibility() {
     let visible = ACTIONS
         .iter()
-        .filter(|a| reachable_from(a.channels, PALETTE))
+        .filter(|a| reachable_from(a.channels, Channels::PALETTE))
         .count();
     assert!(
         visible > 0 && visible < ACTIONS.len(),
@@ -168,7 +170,7 @@ fn channels_distinguish_registry_membership_from_palette_visibility() {
     // The action that opens the palette must never be palette-visible: reaching
     // it from the palette would need the palette already open.
     let open = ACTIONS.iter().find(|a| a.id == "palette.open").unwrap();
-    assert!(!reachable_from(open.channels, PALETTE));
+    assert!(!reachable_from(open.channels, Channels::PALETTE));
 }
 
 /// The documented grammar says the middle segment is a verb and noun forms are
@@ -242,13 +244,13 @@ fn a_runtime_table_merges_beside_the_built_in_one() {
             Action {
                 id: Cow::Owned(String::from("plugin.greet")),
                 label: Cow::Owned(String::from("Say Hello")),
-                channels: PALETTE,
+                channels: Channels::PALETTE,
                 arg: ArgShape::None,
             },
             Action {
                 id: Cow::Owned(String::from("host.edit")),
                 label: Cow::Owned(String::from("Edit Host…")),
-                channels: PALETTE,
+                channels: Channels::PALETTE,
                 arg: ArgShape::HostTab,
             },
         ]),
@@ -278,7 +280,7 @@ fn a_runtime_table_cannot_redefine_a_built_in_action() {
         actions: Cow::Owned(vec![Action {
             id: Cow::Borrowed("term.copy"),
             label: Cow::Owned(String::from("Copy, but different")),
-            channels: PALETTE,
+            channels: Channels::PALETTE,
             arg: ArgShape::None,
         }]),
     };
@@ -295,13 +297,13 @@ fn a_duplicate_names_both_sources_and_both_positions() {
             Action {
                 id: Cow::Borrowed("pane.close"),
                 label: Cow::Borrowed("Close Pane"),
-                channels: PALETTE,
+                channels: Channels::PALETTE,
                 arg: ArgShape::Pane,
             },
             Action {
                 id: Cow::Borrowed("term.copy"),
                 label: Cow::Borrowed("Copy (again)"),
-                channels: PALETTE,
+                channels: Channels::PALETTE,
                 arg: ArgShape::None,
             },
         ]),
@@ -336,7 +338,7 @@ fn two_sources_sharing_a_name_are_still_told_apart() {
         actions: Cow::Owned(vec![Action {
             id: Cow::Borrowed("plugin.greet"),
             label: Cow::Borrowed("Greet"),
-            channels: PALETTE,
+            channels: Channels::PALETTE,
             arg: ArgShape::None,
         }]),
     };
@@ -345,7 +347,7 @@ fn two_sources_sharing_a_name_are_still_told_apart() {
         actions: Cow::Owned(vec![Action {
             id: Cow::Borrowed("plugin.greet"),
             label: Cow::Borrowed("Greet, again"),
-            channels: PALETTE,
+            channels: Channels::PALETTE,
             arg: ArgShape::None,
         }]),
     };
@@ -375,13 +377,13 @@ fn a_duplicate_inside_one_source_is_also_rejected() {
             Action {
                 id: Cow::Borrowed("app.quit"),
                 label: Cow::Borrowed("Quit"),
-                channels: PALETTE,
+                channels: Channels::PALETTE,
                 arg: ArgShape::None,
             },
             Action {
                 id: Cow::Borrowed("app.quit"),
                 label: Cow::Borrowed("Quit, pasted"),
-                channels: PALETTE,
+                channels: Channels::PALETTE,
                 arg: ArgShape::None,
             },
         ]),
@@ -416,8 +418,8 @@ fn name_lookup_does_not_scan_the_row_slice() {
     }
 }
 
-/// A containment test against `KEY_ONLY` answers `true` for everything,
-/// `PALETTE` included, because it is the empty set.
+/// A containment test against `Channels::KEY_ONLY` answers `true` for everything,
+/// `Channels::PALETTE` included, because it is the empty set.
 ///
 /// Pinned so the obvious "fix" is not made: special-casing the empty set inside
 /// `reachable_from` would make it something other than containment.
@@ -432,11 +434,21 @@ fn the_empty_channel_set_is_a_value_and_not_a_query() {
         .find(|a| a.id == "term.copy")
         .expect("term.copy is registered");
 
-    assert_eq!(key_only.channels, KEY_ONLY);
-    assert!(!reachable_from(key_only.channels, PALETTE));
+    assert_eq!(key_only.channels, Channels::KEY_ONLY);
+    assert!(!reachable_from(key_only.channels, Channels::PALETTE));
 
     // Both answer `true`, which is why the question has to be asked with `==`.
-    assert!(reachable_from(key_only.channels, KEY_ONLY));
-    assert!(reachable_from(in_palette.channels, KEY_ONLY));
-    assert_ne!(in_palette.channels, KEY_ONLY);
+    assert!(reachable_from(key_only.channels, Channels::KEY_ONLY));
+    assert!(reachable_from(in_palette.channels, Channels::KEY_ONLY));
+    assert_ne!(in_palette.channels, Channels::KEY_ONLY);
+}
+
+/// `Default` is `Channels::KEY_ONLY`, the named empty set.
+///
+/// Nothing constructs an `Action` by default today, so this costs nothing --
+/// but if such a path appears, the safe direction is an action nobody's
+/// palette or menu can reach, and this pins that the macro keeps it so.
+#[test]
+fn the_default_is_key_only() {
+    assert_eq!(Channels::default(), Channels::KEY_ONLY);
 }

@@ -21,19 +21,27 @@ pub struct Action {
     pub channels: Channels,          // PALETTE|CLICK|MENU|DRAG. ux §4's "publish" column, minus K
     pub arg: ArgShape,               // None|Host|Pane|TabIndex|Snippet|HostTab{..}|...
 }
-pub const KEY_ONLY: Channels;        // the empty set. Build a row with it; never query with it
+impl Channels { pub const KEY_ONLY: Channels; }  // the empty set, and `Default`. Build a row with it; never query with it
 
 // baton-action/src/context.rs -- what a `when` clause can name. Same shape as Channels (#87)
 pub struct Flags(u32);               // which conditions hold, and equally one condition
-pub const PANE_FOCUSED: Flags;       // seventeen of these
-// Both bitsets declare their constants **and their two operations** with `bitset!`
-// (#88, #90). No shift and no bit arithmetic is written by hand outside that macro,
-// and a test per type pins both. The operations are named by the caller because the
+impl Flags { pub const PANE_FOCUSED: Flags; }  // seventeen of these, associated (#97)
+// Both bitsets declare their constants, **their empty set (which `Default` returns)**
+// **and their two operations** with `bitset!`
+// (#88, #90). No shift and no bit arithmetic is written by hand outside that macro
+// **except the conflict sweep** (#96): enumerating every assignment
+// (`assignments()`, crate-private) and counting a group's held members are
+// unwritable through the two set operations. A test per type pins the macro; the sweep's bound is pinned
+// by a fixture on the highest bit. The operations are named by the caller because the
 // question differs -- `reachable_from` asks about a surface, `holds` about a condition.
 // **`bitflags` is not used** (#90): its operations are not `const fn` and the tables
-// here are `const`, and `from_name` matches the constant identifier rather than the
-// spelling the specification fixes.
-pub const NONE: Flags;               // the empty set. Same hazard as KEY_ONLY
+// here are `const`, and its `from_name` matches the identifier as written
+// (SCREAMING_CASE), never the lowercase spelling the specification fixes.
+// **A spelling is the identifier, ASCII-lowercased, derived at compile time** (#99):
+// renaming a constant renames the vocabulary users write in keymap files, and the
+// hand-transcribed test table is what catches a rename doing that by accident.
+impl Flags { pub const NONE: Flags; }             // the empty set, and `Default`. Same hazard as KEY_ONLY
+impl Flags { pub const EXCLUSIVE: &'static [Flags]; }  // at-most-one groups the sweep trusts
 pub const fn holds(set: Flags, wanted: Flags) -> bool;
 pub const fn combine(set: Flags, extra: Flags) -> Flags;   // `union` is taken at the crate root
 pub struct Flag(Flags);              // exactly one condition: a clause's leaf
@@ -46,7 +54,8 @@ impl From<Flag> for Flags;           // widen to a set of one, to ask `holds`
 pub const fn reachable_from(set: Channels, surface: Channels) -> bool;
 pub const fn union(set: Channels, extra: Channels) -> Channels;   // a fn, not `|`, because const
 
-pub struct Binding {                          // how it is reached. Replaceable, and there may be several
+// baton-action/src/keymap.rs -- how it is reached
+pub struct Binding {                          // one row. Replaceable, and there may be several per action
     pub action: Cow<'static, str>,            // joins on Action::id
     pub key: Cow<'static, str>,               // "meta+shift+KeyD"
     pub when: Option<Cow<'static, str>>,      // #11 parses this
@@ -72,7 +81,7 @@ impl Registry {
 // that can compute the integer can build an index the registry never issued.
 ```
 
-**`KEY_ONLY` is the empty set, so it cannot be used as a query.** `reachable_from(anything, KEY_ONLY)` is always `true`. "Does this reach no surface at all?" is asked as `channels == KEY_ONLY`.
+**`Channels::KEY_ONLY` is the empty set, so it cannot be used as a query.** `reachable_from(anything, Channels::KEY_ONLY)` is always `true`. "Does this reach no surface at all?" is asked as `channels == Channels::KEY_ONLY`.
 
 **An `ActionId` means something only inside the registry that issued it.** The scope is the registry, not the run: with two registries the indices overlap. If a reason to build a second one ever appears, that is the point to design against.
 

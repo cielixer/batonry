@@ -9,6 +9,8 @@
 
 use std::borrow::Cow;
 
+use crate::bitset::bitset;
+
 /// Where an action can be invoked from, other than by a key.
 ///
 /// **Key reachability is deliberately absent.** An action is reachable by key
@@ -26,14 +28,16 @@ use std::borrow::Cow;
 #[repr(transparent)]
 pub struct Channels(u8);
 
-/// The command palette.
-pub const PALETTE: Channels = Channels(1 << 0);
-/// A direct click on something.
-pub const CLICK: Channels = Channels(1 << 1);
-/// A context or overflow menu.
-pub const MENU: Channels = Channels(1 << 2);
-/// A drag gesture.
-pub const DRAG: Channels = Channels(1 << 3);
+bitset!(Channels, reachable_from, union:
+    /// The command palette.
+    PALETTE,
+    /// A direct click on something.
+    CLICK,
+    /// A context or overflow menu.
+    MENU,
+    /// A drag gesture.
+    DRAG,
+);
 /// No non-key surface. Every action carrying this is reached by a key instead,
 /// which a test in the keymap suite asserts row by row.
 ///
@@ -41,17 +45,6 @@ pub const DRAG: Channels = Channels(1 << 3);
 /// so [`reachable_from`]`(anything, KEY_ONLY)` is `true`, `PALETTE` included.
 /// "Does this reach nothing?" is `set == KEY_ONLY`.
 pub const KEY_ONLY: Channels = Channels(0);
-
-/// Whether `set` includes every bit of `surface`.
-pub const fn reachable_from(set: Channels, surface: Channels) -> bool {
-    set.0 & surface.0 == surface.0
-}
-
-/// Set union. A `const fn` and not `BitOr`, because operator traits are not
-/// callable in the `const` context the table is built in.
-pub const fn union(set: Channels, extra: Channels) -> Channels {
-    Channels(set.0 | extra.0)
-}
 
 /// The shape of the argument an action expects.
 ///

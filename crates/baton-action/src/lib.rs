@@ -56,7 +56,39 @@
 //!   decisions belong.
 //! - **Condition (`when`)** -- a guard on a *binding*, deciding whether that
 //!   keystroke becomes an action or **falls through** to whatever else is
-//!   listening. Not "is this action greyed out". Opaque here.
+//!   listening. Not "is this action greyed out". Written as a [`Predicate`].
+//! - **[`Flags`]** -- which conditions hold, and equally one condition: a set
+//!   either way, the same shape as [`Channels`]. Seventeen of them, and the
+//!   vocabulary is **closed**, so a misspelling is refused rather than becoming
+//!   a clause that is quietly false and disables a key with no diagnosis.
+//!   Whoever owns the UI state fills it; this crate only reads it, which is how
+//!   the condition language stays unaware that a UI toolkit exists. [`NONE`] is
+//!   a value to build a set from and never one to ask about: every set contains
+//!   it, so `holds(anything, NONE)` is `true`.
+//! - **[`Flag`]** -- exactly one condition, which is what a clause's leaf names.
+//!   A set holds none or several as readily as one and a leaf can hold neither,
+//!   so parsing a name is the only way to build one and its field is private.
+//!   One condition by construction rather than by a check. Only this type
+//!   converts to and from a name; widen it with `into()` to ask [`holds`].
+//! - **[`Predicate`]** -- a parsed `when` clause. Five node kinds and four
+//!   operators (`!`, `&&`, `||`, `==`), deliberately: every operator it gained
+//!   would become availability that somebody has to debug.
+//! - **[`Keymap`]** -- the binding table with every chord and condition already
+//!   parsed, **keyed by chord**, so a keypress is a hash and never a parse or a
+//!   scan. Built by [`assemble`], which panics on a table that cannot be parsed
+//!   rather than deferring the failure to the keystroke that hits the bad row.
+//!   Its rows are not public: what a caller asks is `lookup`, and what it gets
+//!   back is an [`ActionId`] it can publish.
+//! - **Suppression while editing** -- the one rule that is global rather than
+//!   written per binding. While [`EDITING_TEXT`] holds, a binding on a bare
+//!   key that a text input *consumes* is suppressed: the character keys, Space,
+//!   Backspace, Delete, Home, End, and the left and right arrows. So typing `q`
+//!   into a field cannot quit the app, and Backspace reaches the field rather
+//!   than a binding. `Escape`, `Enter` and the **up and down** arrows stay
+//!   alive, because a single-line field does not use them and the palette does.
+//!   A modified chord is outside the rule entirely -- what keeps `⌘C` from
+//!   taking the terminal's selection while someone types in the palette is its
+//!   own `pane_focused` guard, not this.
 //!
 //! - **[`Registry`]** -- the merged actions plus a name index, built once from
 //!   each [`Source`]. It hands out `(ActionId, &Action)` and never the slice, so
@@ -73,12 +105,17 @@
 //! # Style
 //!
 //! Plain data with free functions over it, and methods only where a type owns
-//! state and an invariant -- which here is [`Registry`] alone. No trait objects
-//! and no dynamic dispatch anywhere.
+//! an invariant. Two do: [`Registry`], whose name index and row slice have to
+//! agree, and [`Flag`], which is one condition and not a set of them. No trait
+//! objects and no dynamic dispatch anywhere.
 
 mod action;
+mod bitset;
 mod catalog;
+mod context;
+mod keymap;
 mod keystroke;
+mod predicate;
 mod registry;
 
 pub use action::{
@@ -86,6 +123,15 @@ pub use action::{
     reachable_from, union,
 };
 pub use catalog::{ACTIONS, BUILT_IN, DEFAULT_KEYMAP};
+pub use context::{
+    DIALOG_HOSTKEY_CHANGED, DIALOG_HOSTKEY_NEW, DIALOG_OPEN, EDITING_TEXT,
+    Flag, Flags, HAS_JUMP, HAS_QUEUED_INPUT, HAS_SELECTION, HOST_SELECTED,
+    NONE, PALETTE_OPEN, PANE_DISCONNECTED, PANE_FOCUSED, PANE_LIVE,
+    SCRATCH_ACTIVE, SEARCH_OPEN, SIDEBAR_HOSTS, SIDEBAR_WORKSPACES,
+    UnknownFlag, WORKSPACE_ACTIVE, combine, holds,
+};
+pub use keymap::{Keymap, assemble};
+pub use predicate::{Predicate, PredicateError, evaluate};
 
 pub use keystroke::{Keystroke, KeystrokeError};
 pub use registry::{ActionId, Registry, Source, merge};

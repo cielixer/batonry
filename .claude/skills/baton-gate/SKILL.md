@@ -82,13 +82,20 @@ that test be weakened.
 `UPSTREAM.diff` per its header and confirm no unexplained delta.
 
 **Everything git tracks is English**, except fixtures whose subject *is* the
-text. The allowlist lives in `CLAUDE.md` section 5 and **is not restated here**
--- one number in two places is how it drifts, and it already moved twice in a
-day. Compare, and treat a difference in **either** direction as a failure: an
-extra file is an English-only violation, a missing one means the allowlist is
-now over-permissive and gets narrowed in this commit.
+text. Since #17 this check and the two hardcopy checks above are scripts that
+CI runs on every pull request -- run the same ones rather than restating them,
+so a hand gate and CI cannot drift:
 
-    git ls-files | xargs grep -l '[가-힣]'
+    ./.github/ci/check-english-only.sh
+    ./.github/ci/check-hardcopy-winit.sh
+    ./.github/ci/check-hardcopy-term.sh
+
+The allowlist is `.github/korean-allowlist.txt` (via `CLAUDE.md` section 5); a
+difference in **either** direction fails -- an extra file is an English-only
+violation, a missing one means the allowlist is over-permissive and gets
+narrowed in this commit. The branch-relative freeze checks above stay: they
+answer "did THIS branch touch the copies", which the upstream-anchored scripts
+do not.
 
 **Every new word is defined in the crate's `//!` docs.** Most of the vocabulary
 here is this project's rather than Rust's or `iced`'s -- action, binding, chord,
@@ -234,7 +241,11 @@ Subject carries the milestone and stage; GitHub appends the PR number.
     m1/stage1: action registry and the default keymap
 
 Then the PR, keeping the structure of `.github/pull_request_template.md`, with
-`Closes #<n>` in the body. **Only tick a checkbox you actually verified** --
+`Closes #<n>` in the body -- **and open it as a draft** (`gh pr create --draft`).
+The gate is not the last reviewer: the owner reads the diff and comments on
+GitHub after it, and CI deliberately skips drafts, so the run happens once,
+when the owner marks the PR ready. Address their comments on the branch; do not
+mark it ready yourself unless they say so. **Only tick a checkbox you actually verified** --
 that is the whole reason the list exists. Attach numbers, not adjectives, if the
 ticket was on a performance floor.
 

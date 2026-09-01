@@ -1,6 +1,6 @@
 ---
 name: baton-gate
-description: Use before opening a batonry PR - walks the ticket's definition of done, runs the full test suite and the repository-specific checks, then a cross-model review of the whole branch, and opens the PR when all three pass
+description: Use when the owner asks to gate a batonry branch whose draft PR baton-ticket already opened - walks the ticket's definition of done, runs the full test suite and the repository-specific checks, reviews the branch on two parallel fresh contexts, and updates the draft PR when all three pass
 ---
 
 # Gate a batonry branch
@@ -136,12 +136,15 @@ later attempt is a defect report: this repository has already had a gauge
 underflow surface as an assertion failure in an unrelated test, and re-running
 would have buried it.
 
-## 3. Cross-model review
+## 3. The review -- two fresh contexts in parallel, then Fable absorbs the churn
 
-`gpt-5.6-sol` at xhigh, read-only, against `CLAUDE.md`, the `CLAUDE.md` of every
-crate the diff touches, and `.claude/skills/codex/review-checklist.md`. **Run it in the background** with
-`CODEX_TIMEOUT=1800` as a circuit breaker, and put the brief in a file -- all
-free-form prose goes through `--extra-file`, never argv.
+**Launch both at once, read-only, against `CLAUDE.md`, the `CLAUDE.md` of every
+crate the diff touches, and `.claude/skills/codex/review-checklist.md`. Both
+must return `APPROVED`.**
+
+The sol lane, in the background with `CODEX_TIMEOUT=1800` as a circuit breaker,
+the brief in a file -- all free-form prose goes through `--extra-file`, never
+argv:
 
     cat > /tmp/gate.txt <<'BRIEF'
     Suite: fmt/clippy/build/test all green, three consecutive test runs.
@@ -149,32 +152,45 @@ free-form prose goes through `--extra-file`, never argv.
     BRIEF
     .claude/skills/codex/codex-run.sh start --role review --extra-file /tmp/gate.txt "#<n>"
 
-Tell it the suite passed. The reviewer is told not to hunt for coverage gaps,
-and knowing the suite is green keeps it from guessing.
+The Fable lane: a fresh-context agent of the session's model -- **Fable first,
+Opus if Fable is unavailable**; their usage is metered separately from Codex --
+holding the same empirical standard: demonstrate what it claims broken, say how
+it confirmed what it calls load-bearing. Fresh context is the property doing
+the work, and wherever luna implemented, it reviews that code cross-model
+by construction.
 
-**If the reviewer is unavailable** -- quota exhausted, outage -- substitute a
-fresh-context agent of the current model, read-only, against the same contract
-files and checklist, holding the same empirical standard: demonstrate what it
-claims broken, say how it confirmed what it calls load-bearing. Fresh context
-is the property doing the work; #17 and #12 gated this way.
+Tell both that the suite passed. A reviewer told the suite is green does not
+hunt coverage gaps or guess.
+
+**The lanes split by round, and that split is the cost model** (sol at xhigh
+dominated Codex usage; #13 spent five runs). sol sees the branch **first and
+last**: the parallel pass above, and -- only if the branch moved after its
+verdict -- one final delta confirmation before the gate closes (resume its
+thread). Every re-review round in between runs on the Fable lane alone, by
+resuming the same agent with what landed since.
+
+**If sol is unavailable** -- quota exhausted, outage -- the Fable lane alone
+gates, as #17 and #12 did. If Fable is unavailable, the fallback is Opus, not
+skipping the lane.
 
 
 ### The loop
 
 **An approval covers the branch as it stood.** Anything committed after it has
 not been reviewed, so if the branch moves -- and on #11 it moved three times,
-twice changing the public API -- the gate runs again from step 0. Say in the
-brief what landed since, so the reviewer reads a delta rather than the whole
-branch a second time. That re-run found a Critical the first pass could not
-have: the change that caused it did not exist yet.
+twice changing the public API -- the gate runs again from step 0, with the
+re-review on the Fable lane (see above). Say in the notes what landed since,
+so the reviewer reads a delta rather than the whole branch a second time. That
+re-run found a Critical the first pass could not have: the change that caused
+it did not exist yet.
 
 - `APPROVED` -- go to step 4.
 - `REQUEST_CHANGES` -- **engage critically.** Open every `file:line` it cites
   before agreeing. A different model is valuable because it does not share the
   implementation's blind spots; the same property means it does not share its
   context, so some findings are it missing something. Fix the real ones. Push
-  back on the wrong ones with the argument, once. Then resume with
-  `--notes-file`.
+  back on the wrong ones with the argument, once. Then resume the lane that
+  raised them -- the Fable agent directly, sol via `--notes-file`.
 - `NEEDS_REWORK` -- structural. Surface it before mass-editing; this is one of
   the four things that stops a run.
 
@@ -197,7 +213,8 @@ answerable later.
 
 ## 4. Promote what the ledger learned
 
-**Before opening the PR, empty the ledger of anything durable.** It is
+**Before the gate closes -- the draft PR is already open and waiting --
+empty the ledger of anything durable.** It is
 per-ticket and gitignored, so whatever stays in it dies with the ticket. Each
 lesson has exactly one of three homes:
 
@@ -234,27 +251,28 @@ documentation inside a feature branch, which the cross-model review caught as a
 Major -- these two skills were giving opposite instructions, and this table is
 the half that was wrong.
 
-## 5. Commit and open the PR
+## 5. Update the draft PR
 
-Tidy the branch into **one intentional commit**. The repository squash-merges
-with `squash_merge_commit_message=COMMIT_MESSAGES`, so that commit's subject and
-body *become* the squash message -- which makes "tidy the commits" load-bearing
-rather than housekeeping, because several commits concatenate. Verify the text
-as what will live in `git log`: prose, what changed for a person using the app,
-and what the alternative was.
+**The draft PR already exists** -- `baton-ticket` opens it before the owner's
+review, which is what this gate follows. What this step does is bring it up to
+what the gate established:
 
-Subject carries the milestone and stage; GitHub appends the PR number.
+- Fold everything the gate changed into the branch's **one intentional
+  commit** (`git commit --amend`, `git push --force-with-lease`). The
+  repository squash-merges with `squash_merge_commit_message=COMMIT_MESSAGES`,
+  so that commit's subject and body *become* the squash message; verify the
+  text as what will live in `git log` -- prose, what changed for a person
+  using the app, what the alternative was, and what the review rounds found.
+- Update the PR body: **tick the definition-of-done boxes the walk actually
+  verified** -- only those; that is the whole reason the list exists -- and
+  record the review outcome. Attach numbers, not adjectives, if the ticket
+  was on a performance floor.
+- **Leave it a draft.** CI deliberately skips drafts; the run happens once,
+  when the owner marks it ready. Do not mark it ready yourself unless they
+  say so.
 
-    m1/stage1: action registry and the default keymap
-
-Then the PR, keeping the structure of `.github/pull_request_template.md`, with
-`Closes #<n>` in the body -- **and open it as a draft** (`gh pr create --draft`).
-The gate is not the last reviewer: the owner reads the diff and comments on
-GitHub after it, and CI deliberately skips drafts, so the run happens once,
-when the owner marks the PR ready. Address their comments on the branch; do not
-mark it ready yourself unless they say so. **Only tick a checkbox you actually verified** --
-that is the whole reason the list exists. Attach numbers, not adjectives, if the
-ticket was on a performance floor.
+For work with no ticket and no PR yet (the hand-done case), create the draft
+PR here instead, same template, same rules.
 
 Branch policy is settled at ticket setup and not re-argued here.
 
@@ -262,6 +280,7 @@ Branch policy is settled at ticket setup and not re-argued here.
 
 The ticket's definition of done is walked and ticked, the suite is green
 including the repository-specific checks, every new term is defined in the
-crate's `//!` docs, the review returned `APPROVED`
+crate's `//!` docs, both review lanes returned `APPROVED`
 with no standing Critical or Major, the ledger has been emptied of anything
-durable, and the PR is open with `Closes #<n>` and an honestly-ticked checklist.
+durable, and the draft PR carries the amended commit and an honestly-ticked
+checklist.

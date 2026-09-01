@@ -112,11 +112,15 @@ Sub-issues attach to the stage epic:
 
 ## Phase 3 -- Have a second model review the plan
 
-Cheaper than finding the same problem in code. Runs `gpt-5.6-sol` at xhigh, in a
-read-only sandbox, against `CLAUDE.md` and the checklist.
+Cheaper than finding the same problem in code. **sol opens and closes the
+phase; Fable carries the revision loop between them** -- an xhigh run per
+round is what made review the dominant Codex cost, and the loop only needs a
+fresh pair of eyes, which Fable has (Opus when Fable is unavailable; their
+usage is metered separately from Codex).
 
-**Run it in the background** -- xhigh reviews routinely outlast a foreground
-command timeout:
+**First review: `gpt-5.6-sol`** at xhigh, in a read-only sandbox, against
+`CLAUDE.md` and the checklist. **Run it in the background** -- xhigh reviews
+routinely outlast a foreground command timeout:
 
     cat > /tmp/plan.txt <<'BRIEF'
     <what the reviewer should know that the ticket does not say>
@@ -129,16 +133,22 @@ to contain a backtick or a `!`, and a real run lost instructions that way.
 
 Read the trailing tag:
 
-- `APPROVED` -- start implementing with `baton-ticket`.
+- `APPROVED` with no revisions -- start implementing with `baton-ticket`.
 - `REQUEST_CHANGES` -- **engage, do not comply.** Read the code it cites before
   agreeing. A cross-model review is valuable exactly because it does not share
   the planning model's blind spots, which also means it does not share its
   context: some findings are it missing something. Fix the real ones, push back
-  on the wrong ones with the reason, then resume.
+  on the wrong ones with the reason.
 - `NEEDS_REWORK` -- the approach is wrong. Go back to phase 1 rather than
   patching the ticket.
 
-Resume after revising, carrying what you changed:
+**The revision loop runs on Fable, not sol**: each revised ticket goes to a
+fresh-context agent of the session's model, read-only, against the same
+contract and checklist, until it returns `APPROVED`.
+
+**Then sol confirms the final ticket once.** Resume its thread carrying what
+changed and why -- it reads a delta, not the ticket twice -- and its
+`APPROVED` closes the phase:
 
     .claude/skills/codex/codex-run.sh resume --role review --prompt plan-review \
         --notes-file /tmp/notes.txt "#<n>"

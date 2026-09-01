@@ -1,6 +1,6 @@
 # baton-action -- the implementation contract
 
-**This file supplements the repository's [`CLAUDE.md`](../../CLAUDE.md).** The root contract governs the whole project; this one holds rules that apply to this crate alone. On a conflict, the root wins. It is what the root's **A10** (every behaviour goes through the action registry) and **A11** (input goes through the router) expand into.
+**This file supplements the repository's [`CLAUDE.md`](../../CLAUDE.md).** The root contract governs the whole project; this one holds rules that apply to this crate alone. On a conflict, the root wins. It is what the root's **A10** (every behaviour goes through the action registry) expands into.
 
 **Paths are written relative to the repository root.** `DECISIONS.md` and `evidence/*` are under `docs/milestones/01-ssh-client/`.
 
@@ -117,15 +117,4 @@ but a test used it, and #12 will decide the shape it actually needs.
 
 **A key conflict is compile-error grade.** If two actions share a default key and their `when` clauses **can be true at the same time, CI fails.** Do not resolve it with precedence. `⌘D` had been assigned to both favourite and split, and `host_selected` and `pane_focused` really are true together. The check is in the pull request gate, `TESTPLAN.md` §8.
 
-## 2. The input router -- a pane does not own input
-
-```rust
-pub enum TargetSet { Focused, Set(Vec<PaneId>) }
-pub struct InputRouter { targets: TargetSet }
-// dispatch(bytes) -> send to each sink in the target set
-```
-
-- **Keystrokes, pastes, snippet execution, and anything the palette publishes as a send all go through this router.**
-- Do not build `pane.on_key() -> pty.write()`. **Build it once that way and broadcast can never be inserted afterwards.**
-- **M1 has no broadcast feature.** `TargetSet::Set` is defined and no UI is built for it.
-- **Do not break the ability to fill a pane with bytes without running them.** M1 has no UI for it, but the router has to be able to send bytes without a newline: M2 uses it to stage the `tmux` install command and M3 the `baton-agent` one, **leaving the user to press `⏎`.** Do not put code on the send path that appends a newline unconditionally.
+**The input router lives in `baton-core`** (#103). What falls through the keymap reaches the PTY via `baton_core::dispatch`; its rules live in the root's A11 row and `router.rs`'s module docs.

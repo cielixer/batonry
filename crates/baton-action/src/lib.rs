@@ -115,9 +115,10 @@
 //! # Style
 //!
 //! Plain data with free functions over it, and methods only where a type owns
-//! an invariant. Two do: [`Registry`], whose name index and row slice have to
-//! agree, and [`Flag`], which is one condition and not a set of them. No trait
-//! objects and no dynamic dispatch anywhere.
+//! an invariant: [`Registry`], whose name index and row slice have to agree;
+//! [`Flag`], which is one condition and not a set of them; and [`Keymap`],
+//! whose rows are already parsed and resolved. No trait objects and no
+//! dynamic dispatch anywhere.
 
 mod action;
 mod bitset;

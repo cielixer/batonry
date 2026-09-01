@@ -1,6 +1,6 @@
 ---
 name: baton-ticket
-description: Use when implementing a batonry GitHub ticket - runs the whole loop from branch to gate, delegating implementation to Codex in reviewed batches and keeping a ledger of decisions
+description: Use when implementing a batonry GitHub ticket - runs the loop from branch to draft PR, delegating implementation to Codex in reviewed batches and keeping a ledger of decisions; the owner reviews the PR and invokes the gate
 ---
 
 # Implement one batonry ticket
@@ -216,11 +216,31 @@ standard trait impl. Fix directly.
 
 Then regenerate `crates/baton-term/UPSTREAM.diff` if that crate changed.
 
-## Then the gate
+## Then open the draft PR and stop -- the gate is the owner's call
 
-Do not open a PR from here. Run `baton-gate #<n>`, which walks the ticket's
-definition of done, runs the full suite and the repository-specific checks, and
-gets a cross-model review of the whole branch.
+The loop ends by putting the branch where the owner reviews: **tidy the work
+into one intentional commit, push, and open a draft PR** -- then stop. **Do
+not run `baton-gate`**; the owner reads the diff on GitHub first, comments
+land back on this branch, and when their review is done they invoke
+`baton-gate #<n>` themselves.
+
+The commit message is load-bearing: the repository squash-merges with
+`squash_merge_commit_message=COMMIT_MESSAGES`, so this subject and body
+*become* the squash message. Prose, what changed for a person using the app,
+and what the alternative was; the subject carries the milestone and stage
+(`m1/stage1: ...`) and GitHub appends the PR number. The gate may amend it
+later; write it as final anyway.
+
+The PR keeps `.github/pull_request_template.md`'s structure with `Closes #<n>`
+in the body, **and its definition-of-done boxes stay unticked** -- ticking is
+the gate's job, after it walks them. Draft on purpose: CI skips drafts, and
+the one run happens when the owner marks it ready.
+
+The gate that follows walks the definition of done, runs the full suite and
+the repository-specific checks, and gets the branch reviewed -- Fable and sol
+in parallel, fresh contexts -- so the gate's sol pass is the ticket's final
+cross-model review, and running one during the loop reads the same diff twice
+back to back.
 
 ## Ledger
 
@@ -244,4 +264,6 @@ entries knowing they will be triaged rather than kept.
 
 Every checkbox is implemented and verified against the diff, the frozen crates
 are untouched, tests exist for new behaviour, fmt and clippy and build are green,
-the final pass is done, and the ledger has an entry per batch.
+the final pass is done, the ledger has an entry per batch, and the draft PR is
+open with `Closes #<n>` and its checklist honestly unticked. Then it is the
+owner's turn: they review on GitHub, and the gate is theirs to invoke.

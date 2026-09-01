@@ -4,8 +4,8 @@ Three skills that drive development on this repository, plus the Codex runner
 they share.
 
     baton-plan    design, then write the ticket, then have a second model review it
-    baton-ticket  implement one ticket in reviewed batches
-    baton-gate    full suite plus a cross-model review, then the PR
+    baton-ticket  implement one ticket in reviewed batches, ending at a draft PR
+    baton-gate    full suite plus two parallel reviews, updating that PR
 
     codex/        one script, four prompt roles, a review checklist
 

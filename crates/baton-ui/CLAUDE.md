@@ -11,7 +11,7 @@
 ## 1. UI rules
 
 - **Every UI string is English.** Buttons, labels, statuses, errors, menus, empty-state copy, and every character inside a design sketch. Prose written for people (`docs/**/*.md` and the body of `design/*.html`) is Korean. The dividing line is **"does it appear on screen?"**
-- **Do not scatter strings through the code.** Collect UI strings in one place, for the same reason `Theme` collects colours: when i18n is added there should be one place to change. M1 has no locale switching.
+- **Do not scatter strings through the code.** Every user-visible string is a constant in `baton/src/main.rs`, passed into `App::new` (the owner's call on #14): editing copy is an edit there, and i18n later swaps what `main` passes. This crate renders what it is handed and writes no user-visible literal of its own. M1 has no locale switching.
 - **Dark is the default theme.** Do not hardcode a colour; take all of them from one `Theme` struct, so that light and custom themes can be added later.
 - **Restore view state after a restart.** What is restored is the sidebar mode, **whether a group is collapsed**, the sidebar width, the last workspace, and the palette's recent items, all in `app_pref`.
   **What is not restored** is a pane's scroll position, text mid-composition, and a search query. Reviving the scroll position of a session that no longer exists is worse than not restoring it.

@@ -117,4 +117,4 @@ but a test used it, and #12 will decide the shape it actually needs.
 
 **A key conflict is compile-error grade.** If two actions share a default key and their `when` clauses **can be true at the same time, CI fails.** Do not resolve it with precedence. `⌘D` had been assigned to both favourite and split, and `host_selected` and `pane_focused` really are true together. The check is in the pull request gate, `TESTPLAN.md` §8.
 
-**The input router lives in `baton-core`** (#103). What falls through the keymap reaches the PTY via `baton_core::dispatch`; its rules live in the root's A11 row and `router.rs`'s module docs.
+**The input router lives in `baton-core`** (#103). What falls through the keymap reaches the PTY via `baton_core::route_input`; its rules live in the root's A11 row and `router.rs`'s module docs.

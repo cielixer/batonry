@@ -7,4 +7,5 @@ rust-version.workspace = true
 
 [dependencies]
 baton-core = { path = "../baton-core" }
+rusqlite = { workspace = true }
 thiserror = { workspace = true }

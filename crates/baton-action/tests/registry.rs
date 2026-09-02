@@ -22,13 +22,14 @@ use baton_action::{
     reachable_from,
 };
 
-/// The ten ids stage 1 implements. Written out rather than derived from
+/// The eleven ids stage 1 implements. Written out rather than derived from
 /// `ACTIONS`, because a test that reads the value it is checking asserts nothing.
-const STAGE1_IDS: [&str; 10] = [
+const STAGE1_IDS: [&str; 11] = [
     "app.quit",
     "palette.open",
     "palette.close",
     "palette.confirm",
+    "palette.confirm.alt",
     "palette.next",
     "palette.prev",
     "term.copy",
@@ -59,13 +60,13 @@ const DOMAINS: [&str; 16] = [
 ];
 
 #[test]
-fn stage_one_registers_exactly_ten_actions() {
+fn stage_one_registers_exactly_eleven_actions() {
     let got: Vec<&str> = ACTIONS.iter().map(|a| a.id.as_ref()).collect();
     assert_eq!(
         got, STAGE1_IDS,
-        "the stage-1 inventory is fixed at ten ids in a fixed order. Adding one \
-         means it is implemented and reachable -- an action nothing executes is \
-         a palette entry that does nothing"
+        "the stage-1 inventory is fixed at eleven ids in a fixed order. Adding \
+         one means it is implemented and reachable -- an action nothing \
+         executes is a palette entry that does nothing"
     );
 }
 
@@ -289,7 +290,7 @@ fn a_runtime_table_cannot_redefine_a_built_in_action() {
 
 #[test]
 fn a_duplicate_names_both_sources_and_both_positions() {
-    // `term.copy` is at index 6 of the built-in table; put it at index 1 of a
+    // `term.copy` is at index 7 of the built-in table; put it at index 1 of a
     // colliding source so the positions differ and cannot be confused.
     let other = Source {
         name: Cow::Borrowed("other-crate"),
@@ -320,7 +321,7 @@ fn a_duplicate_names_both_sources_and_both_positions() {
         .clone();
     for needle in [
         "term.copy",
-        "source 0 (baton-action) index 6",
+        "source 0 (baton-action) index 7",
         "source 1 (other-crate) index 1",
     ] {
         assert!(text.contains(needle), "message omits {needle:?}: {text}");

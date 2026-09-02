@@ -6,6 +6,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+baton-core = { path = "../baton-core" }
 baton-ui = { path = "../baton-ui" }
 baton-ssh = { path = "../baton-ssh" }
 baton-store = { path = "../baton-store" }

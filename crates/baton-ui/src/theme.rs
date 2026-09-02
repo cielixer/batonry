@@ -7,7 +7,6 @@ pub(crate) struct Theme {
     pub(crate) dock_border: Color,
     pub(crate) text_primary: Color,
     pub(crate) text_muted: Color,
-    #[allow(dead_code)]
     pub(crate) accent: Color,
 }
 

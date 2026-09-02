@@ -46,6 +46,8 @@ const ALLOWED: &[&str] = &[
     "MIT OR Apache-2.0 OR LGPL-2.1-or-later",
     "MIT OR Zlib OR Apache-2.0",
     "Unlicense/MIT",
+    // nucleo-matcher is file-level MPL-2.0 copyleft, linkable from MIT, and unmodified.
+    "MPL-2.0",
 ];
 
 #[test]

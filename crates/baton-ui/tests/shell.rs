@@ -20,6 +20,9 @@ fn sh_app() -> App {
         "Baton".into(),
         "local".into(),
         HINT.into(),
+        "Type a command...".into(),
+        "recent".into(),
+        None,
     );
     app
 }
@@ -100,6 +103,9 @@ fn a_message_for_a_gone_terminal_is_quietly_dropped() {
         "Baton".into(),
         "local".into(),
         HINT.into(),
+        "Type a command...".into(),
+        "recent".into(),
+        None,
     );
     assert!(app.dump_grid().is_none(), "spawn failure means no terminal");
 

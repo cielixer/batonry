@@ -185,7 +185,10 @@ re-run found a Critical the first pass could not have: the change that caused
 it did not exist yet.
 
 - `APPROVED` -- go to step 4.
-- `REQUEST_CHANGES` -- **engage critically.** Open every `file:line` it cites
+- `REQUEST_CHANGES` -- **engage critically.** Read the lane's output **in
+  full from its out-file first** -- on #14 a `tail` ate the finding at the
+  top of sol's list, the disposition covered 7 of 8, and the omission cost a
+  whole extra round. Then open every `file:line` it cites
   before agreeing. A different model is valuable because it does not share the
   implementation's blind spots; the same property means it does not share its
   context, so some findings are it missing something. Fix the real ones. Push

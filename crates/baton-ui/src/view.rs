@@ -1,5 +1,6 @@
 use crate::app::Message;
 use crate::chrome::CHROME;
+use crate::palette_view;
 use crate::project::Projection;
 use baton_term::TerminalView;
 use iced::widget::{Space, container, row, text};
@@ -49,10 +50,21 @@ pub(crate) fn view<'a>(p: &Projection<'a>) -> Element<'a, Message> {
         p.theme.dock_border,
     );
 
-    row![left_dock, centre, right_dock]
+    let base = row![left_dock, centre, right_dock]
         .width(Length::Fill)
         .height(Length::Fill)
-        .into()
+        .into();
+
+    match p.palette.as_ref() {
+        Some(palette) => iced::widget::stack![
+            base,
+            palette_view::overlay(palette.clone(), p.theme, p.recent_tag),
+        ]
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into(),
+        None => base,
+    }
 }
 
 fn dock<'a>(

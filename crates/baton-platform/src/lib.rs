@@ -4,6 +4,40 @@
 //! appears in another crate, that is a bug -- this is the one place to look
 //! when adding a platform.
 
+/// Returns the platform's per-user data directory for Baton.
+///
+/// macOS uses `$HOME/Library/Application Support/baton`; other Unix systems
+/// use `$XDG_DATA_HOME/baton` or `$HOME/.local/share/baton`. This function only
+/// selects a path; the store owns directory creation.
+#[cfg(target_os = "macos")]
+pub fn data_dir() -> std::path::PathBuf {
+    std::env::var_os("HOME")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_default()
+        .join("Library/Application Support/baton")
+}
+
+/// Returns the platform's per-user data directory for Baton.
+///
+/// macOS uses `$HOME/Library/Application Support/baton`; other Unix systems
+/// use `$XDG_DATA_HOME/baton` or `$HOME/.local/share/baton`. This function only
+/// selects a path; the store owns directory creation.
+#[cfg(all(unix, not(target_os = "macos")))]
+pub fn data_dir() -> std::path::PathBuf {
+    std::env::var_os("XDG_DATA_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME")
+                .map(std::path::PathBuf::from)
+                .map(|home| home.join(".local/share"))
+        })
+        .unwrap_or_else(|| std::path::PathBuf::from(".local/share"))
+        .join("baton")
+}
+
+#[cfg(not(unix))]
+compile_error!("data directory undecided for this target; decide it here");
+
 /// The shell a new local terminal runs when nothing chose one: `$SHELL` when
 /// the environment says, otherwise the platform's own default.
 ///

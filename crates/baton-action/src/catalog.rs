@@ -35,6 +35,7 @@ mod id {
     pub const PALETTE_OPEN: &str = "palette.open";
     pub const PALETTE_CLOSE: &str = "palette.close";
     pub const PALETTE_CONFIRM: &str = "palette.confirm";
+    pub const PALETTE_CONFIRM_ALT: &str = "palette.confirm.alt";
     pub const PALETTE_NEXT: &str = "palette.next";
     pub const PALETTE_PREV: &str = "palette.prev";
     pub const TERM_COPY: &str = "term.copy";
@@ -81,6 +82,11 @@ pub const ACTIONS: &[Action] = &[
     act(id::PALETTE_OPEN, "Command Palette", Channels::KEY_ONLY),
     act(id::PALETTE_CLOSE, "Close Palette", Channels::KEY_ONLY),
     act(id::PALETTE_CONFIRM, "Run", Channels::KEY_ONLY),
+    act(
+        id::PALETTE_CONFIRM_ALT,
+        "Run (Alternate)",
+        Channels::KEY_ONLY,
+    ),
     act(id::PALETTE_NEXT, "Next Result", Channels::KEY_ONLY),
     act(id::PALETTE_PREV, "Previous Result", Channels::KEY_ONLY),
     act(
@@ -113,6 +119,7 @@ pub const DEFAULT_KEYMAP: &[Binding] = &[
     bind(id::PALETTE_OPEN, "meta+KeyK", Some("!palette_open")),
     bind(id::PALETTE_CLOSE, "Escape", Some("palette_open")),
     bind(id::PALETTE_CONFIRM, "Enter", Some("palette_open")),
+    bind(id::PALETTE_CONFIRM_ALT, "meta+Enter", Some("palette_open")),
     bind(id::PALETTE_NEXT, "ArrowDown", Some("palette_open")),
     bind(id::PALETTE_PREV, "ArrowUp", Some("palette_open")),
     bind(id::APP_QUIT, "meta+KeyQ", None),

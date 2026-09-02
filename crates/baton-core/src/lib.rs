@@ -20,6 +20,8 @@
 //!   is the adapter's; this function is only the decision between them.
 //! - **[`TargetSet`]** -- which panes receive a dispatch: the focused pane,
 //!   or an explicit set (the broadcast shape, deliberately unused in M1).
+//! - **[`Store`]** -- the persistence port for app-wide convenience state;
+//!   SQLite and in-memory test doubles implement it outside this crate.
 //! - **Delivery** -- one router decision handed onward as a pane and an
 //!   unchanged byte slice: [`route_input`]'s `deliver` callback. Routing chooses
 //!   which live panes receive input; delivery performs the write -- that
@@ -46,5 +48,7 @@ impl PaneId {
 }
 
 mod router;
+mod store;
 
 pub use router::{TargetSet, route_input};
+pub use store::Store;

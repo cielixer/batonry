@@ -12,6 +12,7 @@ baton-core = { path = "../baton-core" }
 baton-action = { path = "../baton-action" }
 baton-term = { path = "../baton-term" }
 iced = { workspace = true }
+nucleo-matcher = { workspace = true }
 
 [dev-dependencies]
 iced_test = { workspace = true }

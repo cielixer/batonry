@@ -40,6 +40,8 @@ tokio = { version = "1", features = [
 ] }
 open = "5.3"
 unicode-width = "0.2"
+nucleo-matcher = "0.3"
+rusqlite = { version = "0.37", features = ["bundled"] }
 
 # W3C UI Events key vocabulary. Not a windowing library -- enums and a bitflags
 # struct -- so `baton-action` can depend on it without learning what a window

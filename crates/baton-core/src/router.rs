@@ -9,7 +9,7 @@
 //! **Routing is a pure function, not an object.** The state it reads -- the
 //! target set, the focused pane, which panes are live -- belongs to the
 //! application's one state tree, and the write itself belongs to the adapter
-//! that owns sessions (A1). [`dispatch`] stands between the two: it decides
+//! that owns sessions (A1). [`route_input`] stands between the two: it decides
 //! *which* panes receive *exactly which* bytes, and hands each decision to a
 //! caller-supplied `deliver`. This crate never holds a pane map, a session,
 //! or a file descriptor.
@@ -38,7 +38,7 @@ pub enum TargetSet {
 /// behind it resolves the pane to a live session through `Substrate::send`
 /// (A1). Nothing here may append or strip a byte: M2 stages the tmux install
 /// command and M3 the agent one, both leaving the user to press Enter.
-pub fn dispatch(
+pub fn route_input(
     targets: &TargetSet,
     focused: Option<PaneId>,
     is_live: impl Fn(PaneId) -> bool,

@@ -4,14 +4,16 @@
 //! because broadcast cannot be retrofitted past it. The compiler cannot see
 //! that rule, so this test greps for it: the application crates' sources must
 //! not reach the pty write envelope directly -- every byte goes through
-//! `dispatch`, and only the substrate adapter (arriving with
-//! #14) may translate a dispatch into a write.
+//! `route_input`, and only the Delivery half (#14's
+//! `baton-ui/src/terminal_event.rs`) translates a routing decision into a write.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
 /// The crates whose sources may not touch the write envelope. `baton-term`
-/// is deliberately absent: its backend IS the pty side, below the router.
+/// is deliberately absent: its backend IS the pty side, below the router,
+/// and its pane-bound pointer telemetry is exempt from routing by ruling
+/// (#107) -- this guard polices the application crates' side of that line.
 const GUARDED: [&str; 4] = ["baton", "baton-action", "baton-core", "baton-ui"];
 
 /// What reaching the envelope looks like in this codebase today: the term
@@ -22,9 +24,10 @@ const GUARDED: [&str; 4] = ["baton", "baton-action", "baton-core", "baton-ui"];
 /// explains the rule.)
 const FORBIDDEN: [&str; 3] = ["BackendCommand::Write", ".notify(", ".write("];
 
-/// Files allowed to name the envelope. Empty today; #14's substrate adapter
-/// joins this list as the one file that turns a dispatch into a write.
-const ALLOWED: [&str; 0] = [];
+/// Files allowed to name the envelope: exactly one, the Delivery adapter --
+/// the file that turns a routing decision into a write (#14). Anything else
+/// wanting on this list is the unroutable-input path this guard exists for.
+const ALLOWED: [&str; 1] = ["baton-ui/src/terminal_event.rs"];
 
 fn rust_sources(dir: &Path, out: &mut Vec<PathBuf>) {
     for entry in fs::read_dir(dir).expect("readable source dir") {

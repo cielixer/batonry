@@ -6,7 +6,7 @@
 //! closed between targeting and dispatch is dropped quietly, never panicked
 //! on.
 
-use baton_core::{PaneId, TargetSet, dispatch};
+use baton_core::{PaneId, TargetSet, route_input};
 
 /// Runs one dispatch and records every delivery as `(pane, bytes)`.
 fn deliveries(
@@ -16,7 +16,7 @@ fn deliveries(
     bytes: &[u8],
 ) -> Vec<(PaneId, Vec<u8>)> {
     let mut log = Vec::new();
-    dispatch(
+    route_input(
         targets,
         focused,
         |id| live.contains(&id),

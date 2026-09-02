@@ -11,7 +11,7 @@
 //!
 //! - **[`PaneId`]** -- one pane on screen, minted by the shell. Not a session
 //!   id (A5) and never persisted.
-//! - **Router ([`dispatch`])** -- every byte heading for a terminal goes
+//! - **Router ([`route_input`])** -- every byte heading for a terminal goes
 //!   through this one pure function: keystrokes, paste, snippet execution,
 //!   palette sends (A11). No pane owns its input, which is what keeps
 //!   broadcast insertable later, and the bytes pass through exactly as given
@@ -21,10 +21,12 @@
 //! - **[`TargetSet`]** -- which panes receive a dispatch: the focused pane,
 //!   or an explicit set (the broadcast shape, deliberately unused in M1).
 //! - **Delivery** -- one router decision handed onward as a pane and an
-//!   unchanged byte slice: [`dispatch`]'s `deliver` callback. Routing chooses
-//!   which live panes receive input; delivery resolves each pane to its
-//!   session and performs the write -- that half lives in the substrate
-//!   adapter (#14), never here.
+//!   unchanged byte slice: [`route_input`]'s `deliver` callback. Routing chooses
+//!   which live panes receive input; delivery performs the write -- that
+//!   half lives in the application's Delivery adapter (#14 landed it as
+//!   `baton-ui`'s `terminal_event.rs`), never here. Stage 2 puts sessions behind
+//!   the `Substrate` port (A1) and its Delivery resolves a pane to its
+//!   session through `Substrate::send`.
 
 /// Identifies one pane on screen.
 ///
@@ -45,4 +47,4 @@ impl PaneId {
 
 mod router;
 
-pub use router::{TargetSet, dispatch};
+pub use router::{TargetSet, route_input};

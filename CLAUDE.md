@@ -116,7 +116,7 @@ batonry/
 | A8 | Correctness is a **settled property**. It may be wrong mid-drag and mid-resize as long as it is right once the gesture ends | synchronous sizing occupies the main thread |
 | A9 | **The shell layout has two docks, left and right, from the start.** The right one may be permanently collapsed in M1 | attaching the right dock in M2 means reworking the centre's size calculation and pane splitting |
 | A10 | **Every behaviour goes through the action registry.** See `crates/baton-action/CLAUDE.md` | building the palette becomes a rewiring of the whole app |
-| A11 | **Input goes through the router** -- `baton_core::dispatch`, a pure function (#102, #103): keystrokes, paste, snippets and palette sends all converge on it. Never build `pane.on_key() -> pty.write()`; never append a newline on the send path (M2/M3 prefill commands and leave Enter to the user); `TargetSet::Set` stays UI-less in M1. Detail lives in `router.rs`'s module docs and its tests | broadcast cannot be inserted later |
+| A11 | **Input goes through the router** -- `baton_core::route_input`, a pure function (#102, #103): keystrokes, paste, snippets and palette sends all converge on it. Never build `pane.on_key() -> pty.write()`; never append a newline on the send path (M2/M3 prefill commands and leave Enter to the user); `TargetSet::Set` stays UI-less in M1. Pane-bound pointer telemetry (mouse reports, alt-screen scroll) stays widget-side: its coordinates target the pane under the cursor, so it can never follow focus or broadcast (#107). Detail lives in `router.rs`'s module docs and its tests | broadcast cannot be inserted later |
 
 ```rust
 trait Substrate {
